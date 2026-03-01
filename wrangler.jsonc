@@ -1,14 +1,14 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "webapp",
+  "name": "doutortext",
   "compatibility_date": "2026-03-01",
   "pages_build_output_dir": "./dist",
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "webapp-production",
-      "database_id": "local-dev-db"
+      "database_name": "doutortext-production",
+      "database_id": "ad3bdb9e-ea98-4b0f-ac29-5bc5a85a0a4f"
     }
   ]
 }
