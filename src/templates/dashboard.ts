@@ -6,7 +6,7 @@ export function dashboardPage(username: string) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard - TextVault</title>
+  <title>Dashboard - DoutorText</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
@@ -51,9 +51,9 @@ export function dashboardPage(username: string) {
   <header class="bg-white border-b border-dark-200 px-4 py-2 flex items-center justify-between shrink-0">
     <div class="flex items-center gap-3">
       <div class="w-8 h-8 bg-brand-400 rounded-lg flex items-center justify-center">
-        <i class="fas fa-vault text-white text-xs"></i>
+        <i class="fas fa-file-medical text-white text-xs"></i>
       </div>
-      <span class="text-lg font-bold text-dark-800">Text<span class="text-brand-400">Vault</span></span>
+      <span class="text-lg font-bold text-dark-800">Doutor<span class="text-brand-400">Text</span></span>
     </div>
     <div class="flex items-center gap-4">
       <span id="saveStatus" class="text-xs text-dark-400 save-indicator">

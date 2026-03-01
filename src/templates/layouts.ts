@@ -6,7 +6,7 @@ export function baseLayout(title: string, content: string, opts?: { noNav?: bool
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} - TextVault</title>
+  <title>${title} - DoutorText</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
@@ -47,9 +47,9 @@ export function landingPage() {
     <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <div class="w-9 h-9 bg-brand-400 rounded-lg flex items-center justify-center">
-          <i class="fas fa-vault text-white text-sm"></i>
+          <i class="fas fa-file-medical text-white text-sm"></i>
         </div>
-        <span class="text-xl font-bold text-dark-800">Text<span class="text-brand-400">Vault</span></span>
+        <span class="text-xl font-bold text-dark-800">Doutor<span class="text-brand-400">Text</span></span>
       </div>
       <div class="flex items-center gap-4">
         <a href="/login" class="text-dark-600 hover:text-dark-800 font-medium transition">Entrar</a>
@@ -113,7 +113,7 @@ export function landingPage() {
             <div class="w-3 h-3 rounded-full bg-red-400"></div>
             <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
             <div class="w-3 h-3 rounded-full bg-green-400"></div>
-            <span class="ml-4 text-sm text-dark-400">TextVault — Dashboard</span>
+            <span class="ml-4 text-sm text-dark-400">DoutorText — Dashboard</span>
           </div>
           <div class="grid grid-cols-4 gap-3">
             <!-- Sidebar mock -->
@@ -171,9 +171,9 @@ export function loginPage(error?: string) {
       <div class="text-center mb-8">
         <a href="/" class="inline-flex items-center gap-2">
           <div class="w-10 h-10 bg-brand-400 rounded-lg flex items-center justify-center">
-            <i class="fas fa-vault text-white"></i>
+            <i class="fas fa-file-medical text-white"></i>
           </div>
-          <span class="text-2xl font-bold text-dark-800">Text<span class="text-brand-400">Vault</span></span>
+          <span class="text-2xl font-bold text-dark-800">Doutor<span class="text-brand-400">Text</span></span>
         </a>
       </div>
 
@@ -222,9 +222,9 @@ export function registerPage(error?: string) {
       <div class="text-center mb-8">
         <a href="/" class="inline-flex items-center gap-2">
           <div class="w-10 h-10 bg-brand-400 rounded-lg flex items-center justify-center">
-            <i class="fas fa-vault text-white"></i>
+            <i class="fas fa-file-medical text-white"></i>
           </div>
-          <span class="text-2xl font-bold text-dark-800">Text<span class="text-brand-400">Vault</span></span>
+          <span class="text-2xl font-bold text-dark-800">Doutor<span class="text-brand-400">Text</span></span>
         </a>
       </div>
 
