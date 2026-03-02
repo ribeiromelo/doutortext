@@ -208,6 +208,9 @@ export function dashboardPage(username: string) {
                 class="flex-1 text-lg sm:text-xl font-bold text-dark-800 placeholder-dark-300 outline-none border-none bg-transparent"
                 oninput="onTitleChange()">
               <div class="flex items-center gap-1 shrink-0">
+                <button onclick="shareNote(state.activeTabId)" class="w-8 h-8 flex items-center justify-center rounded-lg text-dark-300 hover:text-blue-500 hover:bg-blue-50 transition" title="Compartilhar">
+                  <i class="fas fa-share-nodes text-xs"></i>
+                </button>
                 <button onclick="moveNote(state.activeTabId)" class="w-8 h-8 flex items-center justify-center rounded-lg text-dark-300 hover:text-brand-500 hover:bg-brand-50 transition" title="Mover">
                   <i class="fas fa-folder-arrow-up text-xs"></i>
                 </button>
@@ -242,7 +245,7 @@ export function dashboardPage(username: string) {
 
   <!-- Modal -->
   <div id="modal" class="hidden fixed inset-0 modal-bg z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm anim-in" id="modalContent"></div>
+    <div class="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md anim-in" id="modalContent"></div>
   </div>
 
   <!-- Mobile: floating new note button -->
@@ -550,7 +553,9 @@ export function dashboardPage(username: string) {
       return;
     }
 
-    list.innerHTML = state.notes.map(n => \`
+    list.innerHTML = state.notes.map(n => {
+      const hasShares = n.last_edited_by && n.last_edited_by !== '${username}';
+      return \`
       <div class="note-item px-3 py-3 cursor-pointer relative group \${state.activeTabId===n.id?'active':''}"
         onclick="openNote(\${n.id})"
         oncontextmenu="showNoteMenu(event,\${n.id})">
@@ -558,8 +563,9 @@ export function dashboardPage(username: string) {
           <div class="min-w-0 flex-1">
             <div class="font-semibold text-xs text-dark-700 truncate">\${esc(n.title || 'Sem título')}</div>
             <div class="text-[11px] text-dark-400 mt-0.5 truncate">\${esc((n.content||'').substring(0,80)) || 'Nota vazia...'}</div>
-            <div class="text-[10px] text-dark-300 mt-1 flex items-center gap-1">
-              <i class="far fa-clock"></i> \${timeAgo(n.updated_at)}
+            <div class="text-[10px] text-dark-300 mt-1 flex items-center gap-2">
+              <span><i class="far fa-clock"></i> \${timeAgo(n.updated_at)}</span>
+              \${hasShares ? \`<span class="text-blue-400"><i class="fas fa-pen-nib"></i> \${esc(n.last_edited_by)}</span>\` : ''}
             </div>
           </div>
           <button onclick="event.stopPropagation();deleteNote(\${n.id})"
@@ -568,8 +574,8 @@ export function dashboardPage(username: string) {
             <i class="fas fa-trash text-[10px]"></i>
           </button>
         </div>
-      </div>
-    \`).join('');
+      </div>\`;
+    }).join('');
   }
 
   async function createNote() {
@@ -777,6 +783,7 @@ export function dashboardPage(username: string) {
     e.preventDefault(); e.stopPropagation();
     showCtx(e.clientX, e.clientY, [
       { icon:'fa-up-right-from-square', label:'Abrir', fn:()=>openNote(nid) },
+      { icon:'fa-share-nodes', label:'Compartilhar', fn:()=>shareNote(nid) },
       { icon:'fa-folder-arrow-up', label:'Mover', fn:()=>moveNote(nid) },
       null,
       { icon:'fa-trash', label:'Excluir', fn:()=>deleteNote(nid), danger:1 },
@@ -839,6 +846,131 @@ export function dashboardPage(username: string) {
     if (diff < 3600) return Math.floor(diff/60) + 'min';
     if (diff < 86400) return Math.floor(diff/3600) + 'h';
     return new Date(d).toLocaleDateString('pt-BR');
+  }
+
+  // ============================================================
+  // SHARING
+  // ============================================================
+  async function shareNote(noteId) {
+    if (!noteId) return;
+    try {
+      const data = await api('/notes/' + noteId + '/shares');
+      const shares = data.shares || [];
+      renderShareModal(noteId, shares);
+    } catch (e) {
+      showToast('Erro ao carregar compartilhamentos', 'fa-exclamation-circle', 'text-red-400');
+    }
+  }
+
+  function renderShareModal(noteId, shares) {
+    const activeShares = shares.filter(s => s.is_active);
+    const baseUrl = window.location.origin;
+
+    let sharesHtml = '';
+    if (activeShares.length) {
+      sharesHtml = activeShares.map(s => {
+        const url = baseUrl + '/s/' + s.share_token;
+        const permColor = s.permission === 'edit' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
+        const permLabel = s.permission === 'edit' ? 'Edição' : 'Visualização';
+        return \`
+        <div class="flex items-center gap-2 p-3 bg-dark-50 rounded-xl text-sm">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold \${permColor}">\${permLabel}</span>
+              \${s.shared_with_email ? \`<span class="text-xs text-dark-400">\${esc(s.shared_with_email)}</span>\` : '<span class="text-xs text-dark-400">Qualquer um com o link</span>'}
+            </div>
+            <div class="flex items-center gap-1">
+              <input type="text" value="\${esc(url)}" readonly class="flex-1 text-xs text-dark-500 bg-white border border-dark-200 rounded-lg px-2 py-1 truncate" id="shareUrl-\${s.id}">
+              <button onclick="copyShareUrl('shareUrl-\${s.id}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-dark-400 hover:text-brand-500 hover:bg-brand-50 transition shrink-0" title="Copiar">
+                <i class="far fa-copy text-xs"></i>
+              </button>
+            </div>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button onclick="toggleSharePerm(\${s.id},'\${s.permission === 'edit' ? 'view' : 'edit'}',\${noteId})" class="w-7 h-7 flex items-center justify-center rounded-lg text-dark-300 hover:text-brand-500 hover:bg-brand-50 transition" title="Alterar permissão">
+              <i class="fas fa-\${s.permission === 'edit' ? 'eye' : 'pen'} text-[10px]"></i>
+            </button>
+            <button onclick="revokeShare(\${s.id},\${noteId})" class="w-7 h-7 flex items-center justify-center rounded-lg text-dark-300 hover:text-red-500 hover:bg-red-50 transition" title="Revogar">
+              <i class="fas fa-times text-xs"></i>
+            </button>
+          </div>
+        </div>\`;
+      }).join('');
+    } else {
+      sharesHtml = \`<div class="text-center py-4 text-sm text-dark-400">
+        <i class="fas fa-link text-dark-300 text-lg mb-2"></i>
+        <p>Nenhum link de compartilhamento ativo</p>
+      </div>\`;
+    }
+
+    const m = document.getElementById('modal');
+    document.getElementById('modalContent').innerHTML = \`
+      <h3 class="text-lg font-bold text-dark-800 mb-1"><i class="fas fa-share-nodes text-brand-400 mr-2"></i>Compartilhar Nota</h3>
+      <p class="text-xs text-dark-400 mb-4">Crie links para compartilhar com outras pessoas</p>
+      <div class="mb-4">
+        <label class="text-xs font-semibold text-dark-600 mb-2 block">Criar novo link</label>
+        <div class="flex gap-2">
+          <select id="newSharePerm" class="flex-1 px-3 py-2.5 border border-dark-200 rounded-xl text-sm bg-dark-50 outline-none focus:ring-2 focus:ring-brand-400">
+            <option value="view">👁 Apenas visualização</option>
+            <option value="edit">✏️ Pode editar (requer login)</option>
+          </select>
+          <button onclick="createShare(\${noteId})" class="gradient-brand text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition shadow-sm whitespace-nowrap">
+            <i class="fas fa-plus text-xs"></i> Criar
+          </button>
+        </div>
+      </div>
+      <div class="space-y-2 max-h-56 overflow-y-auto sb" id="sharesList">
+        \${sharesHtml}
+      </div>
+      <div class="mt-4 flex justify-end">
+        <button onclick="hideModal()" class="px-4 py-2.5 text-sm text-dark-500 hover:text-dark-700 font-medium rounded-xl hover:bg-dark-50 transition">Fechar</button>
+      </div>\`;
+    m.classList.remove('hidden');
+  }
+
+  async function createShare(noteId) {
+    const perm = document.getElementById('newSharePerm').value;
+    try {
+      const data = await api('/notes/' + noteId + '/shares', {
+        method: 'POST',
+        body: JSON.stringify({ permission: perm })
+      });
+      showToast('Link criado!', 'fa-link', 'text-blue-400');
+      // Refresh the modal
+      await shareNote(noteId);
+    } catch (e) {
+      showToast('Erro ao criar link', 'fa-exclamation-circle', 'text-red-400');
+    }
+  }
+
+  function copyShareUrl(inputId) {
+    const input = document.getElementById(inputId);
+    if (input) {
+      input.select();
+      navigator.clipboard.writeText(input.value).then(() => {
+        showToast('Link copiado!', 'fa-copy', 'text-blue-400');
+      });
+    }
+  }
+
+  async function toggleSharePerm(shareId, newPerm, noteId) {
+    try {
+      await api('/shares/' + shareId, { method:'PUT', body: JSON.stringify({ permission: newPerm }) });
+      showToast('Permissão alterada!', 'fa-pen', 'text-brand-400');
+      await shareNote(noteId);
+    } catch (e) {
+      showToast('Erro ao alterar', 'fa-exclamation-circle', 'text-red-400');
+    }
+  }
+
+  async function revokeShare(shareId, noteId) {
+    try {
+      await api('/shares/' + shareId, { method:'DELETE' });
+      showToast('Link revogado', 'fa-link-slash', 'text-red-400');
+      await shareNote(noteId);
+    } catch (e) {
+      showToast('Erro ao revogar', 'fa-exclamation-circle', 'text-red-400');
+    }
   }
 
   // Keyboard shortcuts
