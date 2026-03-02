@@ -7,7 +7,7 @@ export function dashboardPage(username: string) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Dashboard - DoutorText</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -126,9 +126,17 @@ export function dashboardPage(username: string) {
       <!-- Sidebar Header -->
       <div class="p-3 border-b border-dark-100 flex items-center justify-between">
         <span class="text-xs font-bold text-dark-500 uppercase tracking-wider">Pastas</span>
-        <button onclick="createFolder(null)" class="w-7 h-7 flex items-center justify-center rounded-lg text-brand-400 hover:bg-brand-50 transition" title="Nova pasta">
-          <i class="fas fa-folder-plus text-sm"></i>
-        </button>
+        <div class="flex items-center gap-0.5">
+          <button onclick="toggleAllFolders(true)" class="w-7 h-7 flex items-center justify-center rounded-lg text-dark-400 hover:bg-dark-100 transition" title="Recolher todas">
+            <i class="fas fa-compress-alt text-[10px]"></i>
+          </button>
+          <button onclick="toggleAllFolders(false)" class="w-7 h-7 flex items-center justify-center rounded-lg text-dark-400 hover:bg-dark-100 transition" title="Expandir todas">
+            <i class="fas fa-expand-alt text-[10px]"></i>
+          </button>
+          <button onclick="createFolder(null)" class="w-7 h-7 flex items-center justify-center rounded-lg text-brand-400 hover:bg-brand-50 transition" title="Nova pasta">
+            <i class="fas fa-folder-plus text-sm"></i>
+          </button>
+        </div>
       </div>
 
       <!-- All Notes -->
@@ -254,6 +262,7 @@ export function dashboardPage(username: string) {
     activeTabId: null,
     activeFolderId: null,
     noteContents: {},
+    collapsedFolders: new Set(), // Track which folders are collapsed
     mobileView: 'list' // 'list' | 'editor'
   };
   const API = '/api';
@@ -345,8 +354,18 @@ export function dashboardPage(username: string) {
   // FOLDERS
   // ============================================================
   async function loadFolders() {
+    const isFirstLoad = state.folders.length === 0;
     const data = await api('/folders');
     state.folders = data.folders;
+    // On first load, collapse all subfolders (only root folders visible expanded)
+    if (isFirstLoad) {
+      state.folders.forEach(f => {
+        // Collapse folders that have children and are not root-level
+        if (f.parent_id !== null && state.folders.some(c => c.parent_id === f.id)) {
+          state.collapsedFolders.add(f.id);
+        }
+      });
+    }
     renderFolderTree();
   }
 
@@ -362,13 +381,15 @@ export function dashboardPage(username: string) {
       const sub = buildTree(folders, f.id, depth + 1);
       const act = state.activeFolderId === f.id;
       const pl = 10 + depth * 14;
+      const isCollapsed = state.collapsedFolders.has(f.id);
+      const isOpen = hasCh && !isCollapsed;
       return \`<div>
         <div class="folder-item flex items-center gap-1 px-2 py-2 rounded-xl cursor-pointer group text-sm
           \${act ? 'bg-brand-50 text-brand-700' : 'text-dark-600 hover:bg-dark-50'}"
           style="padding-left:\${pl}px"
           onclick="selectFolder(\${f.id})"
           oncontextmenu="showFolderMenu(event,\${f.id})">
-          \${hasCh ? \`<i class="fas fa-caret-right ft text-dark-400 text-[10px] cursor-pointer \${act?'open':''}" onclick="event.stopPropagation();togCh(\${f.id},this)"></i>\` : '<span class="w-2.5"></span>'}
+          \${hasCh ? \`<i class="fas fa-caret-right ft text-dark-400 text-[10px] cursor-pointer \${isOpen?'open':''}" onclick="event.stopPropagation();togCh(\${f.id})"></i>\` : '<span class="w-2.5"></span>'}
           <i class="fas fa-folder \${act ? 'text-brand-400' : 'text-dark-300'} text-xs"></i>
           <span class="truncate flex-1 font-medium text-xs">\${esc(f.name)}</span>
           <div class="fa-act flex items-center gap-0.5">
@@ -380,7 +401,7 @@ export function dashboardPage(username: string) {
             </button>
           </div>
         </div>
-        \${sub ? \`<div class="tree-ch" id="fc-\${f.id}" style="max-height:1000px">\${sub}</div>\` : ''}
+        \${sub ? \`<div class="tree-ch" id="fc-\${f.id}" style="max-height:\${isCollapsed ? '0' : '1000'}px">\${sub}</div>\` : ''}
       </div>\`;
     }).join('');
   }
@@ -431,6 +452,8 @@ export function dashboardPage(username: string) {
 
   function selectFolder(id) {
     state.activeFolderId = id;
+    // Expand parent folders when selecting a nested folder
+    expandParents(id);
     renderFolderTree();
     loadNotesByFolder(id);
     document.getElementById('allNotesBtn').classList.remove('bg-brand-50','text-brand-600');
@@ -438,11 +461,31 @@ export function dashboardPage(username: string) {
     if (isMobile()) toggleSidebar();
   }
 
-  function togCh(id, el) {
+  // Ensure all ancestor folders of a given folder are expanded (not collapsed)
+  function expandParents(folderId) {
+    let folder = state.folders.find(f => f.id === folderId);
+    while (folder && folder.parent_id) {
+      state.collapsedFolders.delete(folder.parent_id);
+      folder = state.folders.find(f => f.id === folder.parent_id);
+    }
+  }
+
+  function togCh(id) {
+    if (state.collapsedFolders.has(id)) {
+      state.collapsedFolders.delete(id);
+    } else {
+      state.collapsedFolders.add(id);
+    }
+    // Update just the DOM for this folder instead of re-rendering entire tree
     const c = document.getElementById('fc-' + id);
-    if (!c) return;
-    el.classList.toggle('open');
-    c.style.maxHeight = el.classList.contains('open') ? '1000px' : '0px';
+    const arrow = document.querySelector('[onclick="event.stopPropagation();togCh(' + id + ')"]');
+    if (c) {
+      const isOpen = !state.collapsedFolders.has(id);
+      c.style.maxHeight = isOpen ? '1000px' : '0px';
+      if (arrow) {
+        arrow.classList.toggle('open', isOpen);
+      }
+    }
   }
 
   // ============================================================
@@ -456,6 +499,20 @@ export function dashboardPage(username: string) {
     state.notes = data.notes;
     renderNotesList();
     document.getElementById('notesPanelTitle').textContent = 'Todas as notas';
+  }
+
+  // Toggle all folders open or collapsed
+  function toggleAllFolders(collapse) {
+    if (collapse) {
+      state.folders.forEach(f => {
+        if (state.folders.some(c => c.parent_id === f.id)) {
+          state.collapsedFolders.add(f.id);
+        }
+      });
+    } else {
+      state.collapsedFolders.clear();
+    }
+    renderFolderTree();
   }
 
   async function loadNotesByFolder(folderId) {
