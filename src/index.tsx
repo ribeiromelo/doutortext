@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { hashPassword, verifyPassword, generateSessionId } from './lib/auth'
-import { baseLayout, landingPage, loginPage, registerPage } from './templates/layouts'
+import { landingPage, loginPage, registerPage } from './templates/layouts'
 import { dashboardPage } from './templates/dashboard'
 
 type Bindings = {
@@ -19,6 +19,14 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
 // MIDDLEWARE
 // ============================================================
 app.use('/api/*', cors())
+
+// Performance: Cache static pages for logged-out users
+app.use('*', async (c, next) => {
+  await next()
+  // Add security headers
+  c.res.headers.set('X-Content-Type-Options', 'nosniff')
+  c.res.headers.set('X-Frame-Options', 'DENY')
+})
 
 // Auth middleware - resolve session
 async function resolveUser(c: any): Promise<{ id: number; username: string; email: string } | null> {
@@ -59,21 +67,19 @@ function requireAuthAPI() {
 // PUBLIC PAGES
 // ============================================================
 
-// Landing Page
 app.get('/', async (c) => {
   const user = await resolveUser(c)
   if (user) return c.redirect('/app')
+  c.header('Cache-Control', 'public, max-age=300')
   return c.html(landingPage())
 })
 
-// Login Page
 app.get('/login', async (c) => {
   const user = await resolveUser(c)
   if (user) return c.redirect('/app')
   return c.html(loginPage())
 })
 
-// Register Page
 app.get('/register', async (c) => {
   const user = await resolveUser(c)
   if (user) return c.redirect('/app')
@@ -84,7 +90,6 @@ app.get('/register', async (c) => {
 // AUTH ACTIONS
 // ============================================================
 
-// Register POST
 app.post('/register', async (c) => {
   try {
     const body = await c.req.parseBody()
@@ -93,29 +98,16 @@ app.post('/register', async (c) => {
     const password = body.password as string || ''
     const passwordConfirm = body.password_confirm as string || ''
 
-    if (!username || username.length < 3) {
-      return c.html(registerPage('Nome de usuário deve ter pelo menos 3 caracteres'))
-    }
-    if (!email || !email.includes('@')) {
-      return c.html(registerPage('Email inválido'))
-    }
-    if (password.length < 6) {
-      return c.html(registerPage('Senha deve ter pelo menos 6 caracteres'))
-    }
-    if (password !== passwordConfirm) {
-      return c.html(registerPage('As senhas não conferem'))
-    }
+    if (!username || username.length < 3) return c.html(registerPage('Nome de usuário deve ter pelo menos 3 caracteres'))
+    if (!email || !email.includes('@')) return c.html(registerPage('Email inválido'))
+    if (password.length < 6) return c.html(registerPage('Senha deve ter pelo menos 6 caracteres'))
+    if (password !== passwordConfirm) return c.html(registerPage('As senhas não conferem'))
 
-    // Check existing
     const existing = await c.env.DB.prepare(
       'SELECT id FROM users WHERE username = ? OR email = ?'
     ).bind(username, email).first()
+    if (existing) return c.html(registerPage('Usuário ou email já cadastrado'))
 
-    if (existing) {
-      return c.html(registerPage('Usuário ou email já cadastrado'))
-    }
-
-    // Create user
     const passwordHash = await hashPassword(password)
     const result = await c.env.DB.prepare(
       'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)'
@@ -123,82 +115,50 @@ app.post('/register', async (c) => {
 
     const userId = result.meta.last_row_id
 
-    // Create session
     const sessionId = generateSessionId()
-    await c.env.DB.prepare(
-      'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, datetime(\'now\', \'+30 days\'))'
-    ).bind(sessionId, userId).run()
+    // Batch: create session + default folder
+    await c.env.DB.batch([
+      c.env.DB.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, datetime(\'now\', \'+30 days\'))').bind(sessionId, userId),
+      c.env.DB.prepare('INSERT INTO folders (user_id, name, icon) VALUES (?, ?, ?)').bind(userId, 'Minhas Notas', '📝')
+    ])
 
-    // Create default folder
-    await c.env.DB.prepare(
-      'INSERT INTO folders (user_id, name, icon) VALUES (?, ?, ?)'
-    ).bind(userId, 'Minhas Notas', '📝').run()
-
-    setCookie(c, 'session', sessionId, {
-      path: '/',
-      httpOnly: true,
-      secure: true,
-      sameSite: 'Lax',
-      maxAge: 60 * 60 * 24 * 30
-    })
-
+    setCookie(c, 'session', sessionId, { path: '/', httpOnly: true, secure: true, sameSite: 'Lax', maxAge: 60 * 60 * 24 * 30 })
     return c.redirect('/app')
   } catch (e: any) {
     return c.html(registerPage('Erro ao criar conta: ' + e.message))
   }
 })
 
-// Login POST
 app.post('/login', async (c) => {
   try {
     const body = await c.req.parseBody()
     const login = (body.login as string || '').trim()
     const password = body.password as string || ''
 
-    if (!login || !password) {
-      return c.html(loginPage('Preencha todos os campos'))
-    }
+    if (!login || !password) return c.html(loginPage('Preencha todos os campos'))
 
-    // Find user by email or username
     const user = await c.env.DB.prepare(
       'SELECT id, username, email, password_hash FROM users WHERE email = ? OR username = ?'
     ).bind(login.toLowerCase(), login).first()
-
-    if (!user) {
-      return c.html(loginPage('Usuário ou senha inválidos'))
-    }
+    if (!user) return c.html(loginPage('Usuário ou senha inválidos'))
 
     const valid = await verifyPassword(password, user.password_hash as string)
-    if (!valid) {
-      return c.html(loginPage('Usuário ou senha inválidos'))
-    }
+    if (!valid) return c.html(loginPage('Usuário ou senha inválidos'))
 
-    // Create session
     const sessionId = generateSessionId()
-    await c.env.DB.prepare(
-      'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, datetime(\'now\', \'+30 days\'))'
-    ).bind(sessionId, user.id).run()
+    // Batch: create session + clean old
+    await c.env.DB.batch([
+      c.env.DB.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, datetime(\'now\', \'+30 days\'))').bind(sessionId, user.id),
+      c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < datetime(\'now\')').bind(user.id)
+    ])
 
-    // Clean old sessions
-    await c.env.DB.prepare(
-      'DELETE FROM sessions WHERE user_id = ? AND expires_at < datetime(\'now\')'
-    ).bind(user.id).run()
-
-    setCookie(c, 'session', sessionId, {
-      path: '/',
-      httpOnly: true,
-      secure: true,
-      sameSite: 'Lax',
-      maxAge: 60 * 60 * 24 * 30
-    })
-
+    setCookie(c, 'session', sessionId, { path: '/', httpOnly: true, secure: true, sameSite: 'Lax', maxAge: 60 * 60 * 24 * 30 })
     return c.redirect('/app')
   } catch (e: any) {
     return c.html(loginPage('Erro ao entrar: ' + e.message))
   }
 })
 
-// Logout
 app.get('/logout', async (c) => {
   const sessionId = getCookie(c, 'session')
   if (sessionId) {
@@ -213,6 +173,7 @@ app.get('/logout', async (c) => {
 // ============================================================
 app.get('/app', requireAuth(), async (c) => {
   const user = c.get('user')!
+  c.header('Cache-Control', 'private, no-cache')
   return c.html(dashboardPage(user.username))
 })
 
@@ -232,16 +193,10 @@ app.get('/api/folders', requireAuthAPI(), async (c) => {
 app.post('/api/folders', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const { name, parent_id } = await c.req.json()
-  
-  if (!name || !name.trim()) {
-    return c.json({ error: 'Nome é obrigatório' }, 400)
-  }
+  if (!name || !name.trim()) return c.json({ error: 'Nome é obrigatório' }, 400)
 
-  // Verify parent belongs to user
   if (parent_id) {
-    const parent = await c.env.DB.prepare(
-      'SELECT id FROM folders WHERE id = ? AND user_id = ?'
-    ).bind(parent_id, user.id).first()
+    const parent = await c.env.DB.prepare('SELECT id FROM folders WHERE id = ? AND user_id = ?').bind(parent_id, user.id).first()
     if (!parent) return c.json({ error: 'Pasta pai não encontrada' }, 404)
   }
 
@@ -257,24 +212,18 @@ app.put('/api/folders/:id', requireAuthAPI(), async (c) => {
   const id = parseInt(c.req.param('id'))
   const { name, parent_id, sort_order } = await c.req.json()
 
-  const folder = await c.env.DB.prepare(
-    'SELECT id FROM folders WHERE id = ? AND user_id = ?'
-  ).bind(id, user.id).first()
+  const folder = await c.env.DB.prepare('SELECT id FROM folders WHERE id = ? AND user_id = ?').bind(id, user.id).first()
   if (!folder) return c.json({ error: 'Pasta não encontrada' }, 404)
 
   const updates: string[] = []
   const values: any[] = []
-
   if (name !== undefined) { updates.push('name = ?'); values.push(name.trim()) }
   if (parent_id !== undefined) { updates.push('parent_id = ?'); values.push(parent_id) }
   if (sort_order !== undefined) { updates.push('sort_order = ?'); values.push(sort_order) }
   updates.push('updated_at = CURRENT_TIMESTAMP')
-
   values.push(id, user.id)
-  await c.env.DB.prepare(
-    `UPDATE folders SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`
-  ).bind(...values).run()
 
+  await c.env.DB.prepare(`UPDATE folders SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).bind(...values).run()
   return c.json({ success: true })
 })
 
@@ -282,13 +231,9 @@ app.delete('/api/folders/:id', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const id = parseInt(c.req.param('id'))
 
-  // Delete folder, subfolders, and notes (cascading)
-  // First get all descendant folder ids
   const allFolderIds = [id]
   async function getDescendants(parentId: number) {
-    const { results } = await c.env.DB.prepare(
-      'SELECT id FROM folders WHERE parent_id = ? AND user_id = ?'
-    ).bind(parentId, user.id).all()
+    const { results } = await c.env.DB.prepare('SELECT id FROM folders WHERE parent_id = ? AND user_id = ?').bind(parentId, user.id).all()
     for (const f of results) {
       allFolderIds.push(f.id as number)
       await getDescendants(f.id as number)
@@ -296,15 +241,15 @@ app.delete('/api/folders/:id', requireAuthAPI(), async (c) => {
   }
   await getDescendants(id)
 
-  // Delete notes in all these folders
+  // Batch delete for performance
+  const stmts = []
   for (const fid of allFolderIds) {
-    await c.env.DB.prepare('DELETE FROM notes WHERE folder_id = ? AND user_id = ?').bind(fid, user.id).run()
+    stmts.push(c.env.DB.prepare('DELETE FROM notes WHERE folder_id = ? AND user_id = ?').bind(fid, user.id))
   }
-
-  // Delete folders (children first)
   for (const fid of allFolderIds.reverse()) {
-    await c.env.DB.prepare('DELETE FROM folders WHERE id = ? AND user_id = ?').bind(fid, user.id).run()
+    stmts.push(c.env.DB.prepare('DELETE FROM folders WHERE id = ? AND user_id = ?').bind(fid, user.id))
   }
+  await c.env.DB.batch(stmts)
 
   return c.json({ success: true })
 })
@@ -323,7 +268,6 @@ app.get('/api/notes', requireAuthAPI(), async (c) => {
   }
 
   query += ' ORDER BY is_pinned DESC, updated_at DESC'
-
   const { results } = await c.env.DB.prepare(query).bind(...params).all()
   return c.json({ notes: results })
 })
@@ -331,11 +275,7 @@ app.get('/api/notes', requireAuthAPI(), async (c) => {
 app.get('/api/notes/:id', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const id = parseInt(c.req.param('id'))
-
-  const note = await c.env.DB.prepare(
-    'SELECT * FROM notes WHERE id = ? AND user_id = ?'
-  ).bind(id, user.id).first()
-
+  const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').bind(id, user.id).first()
   if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
   return c.json({ note })
 })
@@ -344,11 +284,8 @@ app.post('/api/notes', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const { title, content, folder_id } = await c.req.json()
 
-  // Verify folder belongs to user
   if (folder_id) {
-    const folder = await c.env.DB.prepare(
-      'SELECT id FROM folders WHERE id = ? AND user_id = ?'
-    ).bind(folder_id, user.id).first()
+    const folder = await c.env.DB.prepare('SELECT id FROM folders WHERE id = ? AND user_id = ?').bind(folder_id, user.id).first()
     if (!folder) return c.json({ error: 'Pasta não encontrada' }, 404)
   }
 
@@ -365,36 +302,26 @@ app.put('/api/notes/:id', requireAuthAPI(), async (c) => {
   const id = parseInt(c.req.param('id'))
   const body = await c.req.json()
 
-  const note = await c.env.DB.prepare(
-    'SELECT id FROM notes WHERE id = ? AND user_id = ?'
-  ).bind(id, user.id).first()
+  const note = await c.env.DB.prepare('SELECT id FROM notes WHERE id = ? AND user_id = ?').bind(id, user.id).first()
   if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
 
   const updates: string[] = []
   const values: any[] = []
-
   if (body.title !== undefined) { updates.push('title = ?'); values.push(body.title) }
   if (body.content !== undefined) { updates.push('content = ?'); values.push(body.content) }
   if (body.folder_id !== undefined) { updates.push('folder_id = ?'); values.push(body.folder_id) }
   if (body.is_pinned !== undefined) { updates.push('is_pinned = ?'); values.push(body.is_pinned ? 1 : 0) }
   updates.push('updated_at = CURRENT_TIMESTAMP')
-
   values.push(id, user.id)
-  await c.env.DB.prepare(
-    `UPDATE notes SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`
-  ).bind(...values).run()
 
+  await c.env.DB.prepare(`UPDATE notes SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).bind(...values).run()
   return c.json({ success: true })
 })
 
 app.delete('/api/notes/:id', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const id = parseInt(c.req.param('id'))
-
-  await c.env.DB.prepare(
-    'DELETE FROM notes WHERE id = ? AND user_id = ?'
-  ).bind(id, user.id).run()
-
+  await c.env.DB.prepare('DELETE FROM notes WHERE id = ? AND user_id = ?').bind(id, user.id).run()
   return c.json({ success: true })
 })
 
