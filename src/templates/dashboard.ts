@@ -1,6 +1,6 @@
 // Dashboard template - Main app interface (responsive + polished)
 
-export function dashboardPage(username: string) {
+export function dashboardPage(username: string, isAdmin: boolean = false) {
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -103,6 +103,9 @@ export function dashboardPage(username: string) {
         </div>
         <span class="font-medium hidden sm:inline">${username}</span>
       </div>
+      ${isAdmin ? `<a href="/admin" class="w-8 h-8 flex items-center justify-center rounded-lg text-dark-400 hover:text-red-400 hover:bg-red-50 transition" title="Painel Admin">
+        <i class="fas fa-shield-halved text-sm"></i>
+      </a>` : ''}
       <a href="/logout" class="w-8 h-8 flex items-center justify-center rounded-lg text-dark-400 hover:text-red-500 hover:bg-red-50 transition" title="Sair">
         <i class="fas fa-sign-out-alt text-sm"></i>
       </a>

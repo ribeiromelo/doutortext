@@ -5,13 +5,14 @@ import { hashPassword, verifyPassword, generateSessionId } from './lib/auth'
 import { landingPage, loginPage, registerPage } from './templates/layouts'
 import { dashboardPage } from './templates/dashboard'
 import { sharedNotePage } from './templates/shared'
+import { adminPage } from './templates/admin'
 
 type Bindings = {
   DB: D1Database
 }
 
 type Variables = {
-  user: { id: number; username: string; email: string } | null
+  user: { id: number; username: string; email: string; is_admin: boolean } | null
 }
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
@@ -28,15 +29,15 @@ app.use('*', async (c, next) => {
 })
 
 // Auth middleware - resolve session
-async function resolveUser(c: any): Promise<{ id: number; username: string; email: string } | null> {
+async function resolveUser(c: any): Promise<{ id: number; username: string; email: string; is_admin: boolean } | null> {
   const sessionId = getCookie(c, 'session')
   if (!sessionId) return null
   try {
     const session = await c.env.DB.prepare(
-      'SELECT s.user_id, u.username, u.email FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime(\'now\')'
+      'SELECT s.user_id, u.username, u.email, u.is_admin FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.id = ? AND s.expires_at > datetime(\'now\')'
     ).bind(sessionId).first()
     if (!session) return null
-    return { id: session.user_id as number, username: session.username as string, email: session.email as string }
+    return { id: session.user_id as number, username: session.username as string, email: session.email as string, is_admin: session.is_admin === 1 }
   } catch { return null }
 }
 
@@ -53,6 +54,26 @@ function requireAuthAPI() {
   return async (c: any, next: any) => {
     const user = await resolveUser(c)
     if (!user) return c.json({ error: 'Não autenticado' }, 401)
+    c.set('user', user)
+    await next()
+  }
+}
+
+function requireAdmin() {
+  return async (c: any, next: any) => {
+    const user = await resolveUser(c)
+    if (!user) return c.redirect('/login')
+    if (!user.is_admin) return c.redirect('/app')
+    c.set('user', user)
+    await next()
+  }
+}
+
+function requireAdminAPI() {
+  return async (c: any, next: any) => {
+    const user = await resolveUser(c)
+    if (!user) return c.json({ error: 'Não autenticado' }, 401)
+    if (!user.is_admin) return c.json({ error: 'Acesso negado' }, 403)
     c.set('user', user)
     await next()
   }
@@ -108,9 +129,14 @@ app.post('/register', async (c) => {
     if (existing) return c.html(registerPage('Usuário ou email já cadastrado'))
 
     const passwordHash = await hashPassword(password)
+
+    // Check if this is the first user - auto-promote to admin
+    const userCount = await c.env.DB.prepare('SELECT COUNT(*) as c FROM users').first()
+    const isFirstUser = (userCount as any)?.c === 0
+
     const result = await c.env.DB.prepare(
-      'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)'
-    ).bind(username, email, passwordHash).run()
+      'INSERT INTO users (username, email, password_hash, is_admin) VALUES (?, ?, ?, ?)'
+    ).bind(username, email, passwordHash, isFirstUser ? 1 : 0).run()
 
     const userId = result.meta.last_row_id
     const sessionId = generateSessionId()
@@ -170,7 +196,118 @@ app.get('/logout', async (c) => {
 app.get('/app', requireAuth(), async (c) => {
   const user = c.get('user')!
   c.header('Cache-Control', 'private, no-cache')
-  return c.html(dashboardPage(user.username))
+  return c.html(dashboardPage(user.username, user.is_admin))
+})
+
+// ============================================================
+// ADMIN PAGE (admin only)
+// ============================================================
+app.get('/admin', requireAdmin(), async (c) => {
+  const user = c.get('user')!
+  c.header('Cache-Control', 'private, no-cache')
+  return c.html(adminPage(user.username))
+})
+
+// ============================================================
+// API: ADMIN ROUTES
+// ============================================================
+
+// Stats overview
+app.get('/api/admin/stats', requireAdminAPI(), async (c) => {
+  const [users, notes, folders, shares, edits, sessions, contentLen, admins, activeShares, recentUsers, topUsers] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT COUNT(*) as c FROM users'),
+    c.env.DB.prepare('SELECT COUNT(*) as c FROM notes'),
+    c.env.DB.prepare('SELECT COUNT(*) as c FROM folders'),
+    c.env.DB.prepare('SELECT COUNT(*) as c FROM note_shares'),
+    c.env.DB.prepare('SELECT COUNT(*) as c FROM note_edit_history'),
+    c.env.DB.prepare('SELECT COUNT(*) as c FROM sessions WHERE expires_at > datetime(\'now\')'),
+    c.env.DB.prepare('SELECT COALESCE(SUM(LENGTH(content)), 0) as c FROM notes'),
+    c.env.DB.prepare('SELECT COUNT(*) as c FROM users WHERE is_admin = 1'),
+    c.env.DB.prepare('SELECT COUNT(*) as c FROM note_shares WHERE is_active = 1'),
+    c.env.DB.prepare('SELECT id, username, email, created_at FROM users ORDER BY created_at DESC LIMIT 10'),
+    c.env.DB.prepare('SELECT u.id, u.username, u.is_admin, COUNT(n.id) as note_count FROM users u LEFT JOIN notes n ON u.id = n.user_id GROUP BY u.id ORDER BY note_count DESC LIMIT 10'),
+  ])
+
+  return c.json({
+    total_users: (users.results[0] as any)?.c || 0,
+    total_notes: (notes.results[0] as any)?.c || 0,
+    total_folders: (folders.results[0] as any)?.c || 0,
+    total_shares: (shares.results[0] as any)?.c || 0,
+    total_edits: (edits.results[0] as any)?.c || 0,
+    active_sessions: (sessions.results[0] as any)?.c || 0,
+    total_content_length: (contentLen.results[0] as any)?.c || 0,
+    admin_count: (admins.results[0] as any)?.c || 0,
+    active_shares: (activeShares.results[0] as any)?.c || 0,
+    recent_users: recentUsers.results,
+    top_users: topUsers.results,
+  })
+})
+
+// List all users with counts
+app.get('/api/admin/users', requireAdminAPI(), async (c) => {
+  const { results } = await c.env.DB.prepare(`
+    SELECT u.id, u.username, u.email, u.is_admin, u.created_at,
+      (SELECT COUNT(*) FROM notes WHERE user_id = u.id) as note_count,
+      (SELECT COUNT(*) FROM folders WHERE user_id = u.id) as folder_count,
+      (SELECT COUNT(*) FROM note_shares WHERE owner_id = u.id) as share_count
+    FROM users u ORDER BY u.created_at DESC
+  `).all()
+  return c.json({ users: results })
+})
+
+// Toggle admin status
+app.put('/api/admin/users/:id/admin', requireAdminAPI(), async (c) => {
+  const user = c.get('user')!
+  const targetId = parseInt(c.req.param('id'))
+  const { is_admin } = await c.req.json()
+
+  // Prevent self-demotion
+  if (targetId === user.id && !is_admin) {
+    return c.json({ error: 'Você não pode remover seu próprio admin' }, 400)
+  }
+
+  const target = await c.env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(targetId).first()
+  if (!target) return c.json({ error: 'Usuário não encontrado' }, 404)
+
+  await c.env.DB.prepare('UPDATE users SET is_admin = ? WHERE id = ?').bind(is_admin ? 1 : 0, targetId).run()
+  return c.json({ success: true })
+})
+
+// Delete user (and all their data)
+app.delete('/api/admin/users/:id', requireAdminAPI(), async (c) => {
+  const user = c.get('user')!
+  const targetId = parseInt(c.req.param('id'))
+
+  // Prevent self-deletion
+  if (targetId === user.id) {
+    return c.json({ error: 'Você não pode excluir a si mesmo' }, 400)
+  }
+
+  const target = await c.env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(targetId).first()
+  if (!target) return c.json({ error: 'Usuário não encontrado' }, 404)
+
+  // Cascade delete: shares, edit history, notes, folders, sessions, user
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM note_shares WHERE owner_id = ?').bind(targetId),
+    c.env.DB.prepare('DELETE FROM note_edit_history WHERE user_id = ?').bind(targetId),
+    c.env.DB.prepare('DELETE FROM notes WHERE user_id = ?').bind(targetId),
+    c.env.DB.prepare('DELETE FROM folders WHERE user_id = ?').bind(targetId),
+    c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(targetId),
+    c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(targetId),
+  ])
+
+  return c.json({ success: true })
+})
+
+// Recent activity (all users)
+app.get('/api/admin/activity', requireAdminAPI(), async (c) => {
+  const { results } = await c.env.DB.prepare(`
+    SELECT h.*, n.title as note_title
+    FROM note_edit_history h
+    LEFT JOIN notes n ON h.note_id = n.id
+    ORDER BY h.created_at DESC LIMIT 100
+  `).all()
+  return c.json({ activity: results })
 })
 
 // ============================================================
