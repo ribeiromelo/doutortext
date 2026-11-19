@@ -8,7 +8,7 @@ export function adminPage(username: string) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin - DoutorText</title>
-  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon-emerald.svg">
   <link rel="stylesheet" href="/static/manrope.css">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="/static/utilities.css">

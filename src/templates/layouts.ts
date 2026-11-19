@@ -1,7 +1,7 @@
 import { escapeHtml } from '../lib/security'
 
 export function baseLayout(title: string, content: string) {
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)} · DoutorText</title><meta name="description" content="Seu espaço para escrever, organizar e encontrar suas notas. DoutorText."><link rel="icon" href="/static/favicon.svg"><link rel="stylesheet" href="/static/icons/css/all.min.css"><link rel="stylesheet" href="/static/emerald.css"></head><body>${content}</body></html>`
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)} · DoutorText</title><meta name="description" content="Seu espaço para escrever, organizar e encontrar suas notas. DoutorText."><link rel="icon" href="/static/favicon-emerald.svg"><link rel="stylesheet" href="/static/icons/css/all.min.css"><link rel="stylesheet" href="/static/emerald.css"></head><body>${content}</body></html>`
 }
 
 const brand = `<span class="brand"><span class="brandmark" aria-hidden="true">dt</span>DoutorText</span>`
