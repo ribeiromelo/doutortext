@@ -1,3 +1,4 @@
+import { escapeHtml, scriptJson } from '../lib/security'
 // Admin Panel template
 
 export function adminPage(username: string) {
@@ -8,30 +9,18 @@ export function adminPage(username: string) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin - DoutorText</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="/static/manrope.css">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            brand: { 50:'#fffbeb',100:'#fef3c7',200:'#fde68a',300:'#fcd34d',400:'#F5A623',500:'#E8971A',600:'#d97706',700:'#b45309',800:'#92400e',900:'#78350f' },
-            dark: { 50:'#f9fafb',100:'#f3f4f6',200:'#e5e7eb',300:'#d1d5db',400:'#9ca3af',500:'#6b7280',600:'#4b5563',700:'#374151',800:'#1f2937',900:'#111827' }
-          },
-          fontFamily: { sans:['Poppins','sans-serif'], mono:['JetBrains Mono','monospace'] }
-        }
-      }
-    }
-  </script>
+  <link rel="stylesheet" href="/static/utilities.css">
+  <link href="/static/icons/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/static/manrope.css">
+
   <style>
-    *{font-family:'Poppins',sans-serif;margin:0;padding:0;box-sizing:border-box}
+    *{font-family:'Manrope',sans-serif;margin:0;padding:0;box-sizing:border-box}
     .sb::-webkit-scrollbar{width:4px;height:4px}
     .sb::-webkit-scrollbar-track{background:transparent}
     .sb::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:4px}
-    .gradient-brand{background:linear-gradient(135deg,#F5A623 0%,#E8971A 50%,#d97706 100%)}
+    .gradient-brand{background:linear-gradient(135deg,#078663 0%,#006c50 50%,#00523e 100%)}
     .gradient-dark{background:linear-gradient(135deg,#1f2937 0%,#111827 100%)}
     .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);opacity:0;transition:all .3s ease;z-index:9999;pointer-events:none}
     .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
@@ -43,6 +32,7 @@ export function adminPage(username: string) {
     tr:hover td{background:#f9fafb}
     .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
   </style>
+  <link rel="stylesheet" href="/static/emerald.css">
 </head>
 <body class="bg-dark-50 min-h-screen">
   <!-- Toast -->
@@ -76,9 +66,9 @@ export function adminPage(username: string) {
       </a>
       <div class="flex items-center gap-1.5 text-sm">
         <div class="w-7 h-7 rounded-full gradient-brand flex items-center justify-center text-white text-xs font-bold shadow-sm">
-          ${username.charAt(0).toUpperCase()}
+          ${escapeHtml(username.charAt(0).toUpperCase())}
         </div>
-        <span class="font-medium hidden sm:inline">${username}</span>
+        <span class="font-medium hidden sm:inline">${escapeHtml(username)}</span>
       </div>
     </div>
   </header>
@@ -87,13 +77,13 @@ export function adminPage(username: string) {
   <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
     <!-- Navigation tabs -->
     <div class="flex items-center gap-1 mb-6 bg-white rounded-xl border border-dark-200 p-1 overflow-x-auto sb">
-      <button onclick="switchTab('overview')" id="tab-overview" class="admin-tab px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-2 bg-dark-800 text-white">
+      <button data-dt-click="switchTab('overview')" id="tab-overview" class="admin-tab px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-2 bg-dark-800 text-white">
         <i class="fas fa-chart-pie text-xs"></i> Vis\u00e3o Geral
       </button>
-      <button onclick="switchTab('users')" id="tab-users" class="admin-tab px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-2 text-dark-500 hover:bg-dark-50">
+      <button data-dt-click="switchTab('users')" id="tab-users" class="admin-tab px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-2 text-dark-500 hover:bg-dark-50">
         <i class="fas fa-users text-xs"></i> Usu\u00e1rios
       </button>
-      <button onclick="switchTab('activity')" id="tab-activity" class="admin-tab px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-2 text-dark-500 hover:bg-dark-50">
+      <button data-dt-click="switchTab('activity')" id="tab-activity" class="admin-tab px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-2 text-dark-500 hover:bg-dark-50">
         <i class="fas fa-clock-rotate-left text-xs"></i> Atividade
       </button>
     </div>
@@ -104,7 +94,7 @@ export function adminPage(username: string) {
     <div id="content-activity" class="tab-content hidden"></div>
   </main>
 
-  <script>
+  <script data-dt-script>
   let adminData = { stats: {}, users: [], activity: [] };
   let currentTab = 'overview';
 
@@ -126,7 +116,7 @@ export function adminPage(username: string) {
       '<h3 class="text-lg font-bold text-dark-800 mb-4">' + title + '</h3>' +
       '<div class="mb-6">' + body + '</div>' +
       '<div class="flex justify-end gap-2">' +
-        '<button onclick="hideModal()" class="px-4 py-2.5 text-sm text-dark-500 hover:text-dark-700 font-medium rounded-xl hover:bg-dark-50 transition">Cancelar</button>' +
+        '<button data-dt-click="hideModal()" class="px-4 py-2.5 text-sm text-dark-500 hover:text-dark-700 font-medium rounded-xl hover:bg-dark-50 transition">Cancelar</button>' +
         '<button id="mc" class="px-5 py-2.5 text-sm font-bold text-white rounded-xl transition shadow-sm ' +
           (isDanger ? 'bg-red-500 hover:bg-red-600' : 'gradient-brand hover:opacity-90') + '">Confirmar</button>' +
       '</div>';
@@ -295,7 +285,7 @@ export function adminPage(username: string) {
         <span class="text-sm font-bold text-dark-700"><i class="fas fa-users text-brand-400 mr-2"></i>Usu\u00e1rios cadastrados (\${users.length})</span>
         <div class="relative">
           <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-dark-300 text-xs"></i>
-          <input id="userSearch" type="text" placeholder="Buscar usu\u00e1rio..." oninput="filterUsers()"
+          <input id="userSearch" type="text" placeholder="Buscar usu\u00e1rio..." data-dt-input="filterUsers()"
             class="pl-8 pr-3 py-2 text-xs border border-dark-200 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none bg-dark-50 w-48">
         </div>
       </div>
@@ -347,13 +337,13 @@ export function adminPage(username: string) {
       <td class="px-4 py-3 text-center">
         <div class="flex items-center justify-center gap-1">
           \${isAdmin
-            ? \`<button onclick="toggleAdmin(\${u.id}, false, '\${esc(u.username)}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition" title="Remover admin">
+            ? \`<button data-dt-click="toggleAdmin(\${u.id}, false)" class="w-7 h-7 flex items-center justify-center rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition" title="Remover admin">
                 <i class="fas fa-shield-xmark text-xs"></i>
               </button>\`
-            : \`<button onclick="toggleAdmin(\${u.id}, true, '\${esc(u.username)}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-dark-300 hover:text-brand-500 hover:bg-brand-50 transition" title="Tornar admin">
+            : \`<button data-dt-click="toggleAdmin(\${u.id}, true)" class="w-7 h-7 flex items-center justify-center rounded-lg text-dark-300 hover:text-brand-500 hover:bg-brand-50 transition" title="Tornar admin">
                 <i class="fas fa-shield-halved text-xs"></i>
               </button>\`}
-          <button onclick="deleteUser(\${u.id}, '\${esc(u.username)}')" class="w-7 h-7 flex items-center justify-center rounded-lg text-dark-300 hover:text-red-500 hover:bg-red-50 transition" title="Excluir usu\u00e1rio">
+          <button data-dt-click="deleteUser(\${u.id})" class="w-7 h-7 flex items-center justify-center rounded-lg text-dark-300 hover:text-red-500 hover:bg-red-50 transition" title="Excluir usu\u00e1rio">
             <i class="fas fa-trash text-xs"></i>
           </button>
         </div>
@@ -368,13 +358,14 @@ export function adminPage(username: string) {
     });
   }
 
-  async function toggleAdmin(userId, makeAdmin, username) {
+  async function toggleAdmin(userId, makeAdmin) {
+    const username = adminData.users.find(x => x.id === userId)?.username || "";
     const action = makeAdmin ? 'promover a Admin' : 'remover de Admin';
     showModal(
       (makeAdmin ? 'Promover' : 'Rebaixar') + ' usu\u00e1rio',
       '<div class="flex items-center gap-3 p-3 ' + (makeAdmin ? 'bg-brand-50' : 'bg-red-50') + ' rounded-xl">' +
         '<i class="fas fa-shield-halved text-lg ' + (makeAdmin ? 'text-brand-400' : 'text-red-400') + '"></i>' +
-        '<p class="text-dark-600 text-sm">Deseja ' + action + ' <strong>"' + username + '"</strong>?</p>' +
+        '<p class="text-dark-600 text-sm">Deseja ' + action + ' <strong>"' + esc(username) + '"</strong>?</p>' +
       '</div>',
       async () => {
         try {
@@ -392,12 +383,13 @@ export function adminPage(username: string) {
     );
   }
 
-  async function deleteUser(userId, username) {
+  async function deleteUser(userId) {
+    const username = adminData.users.find(x => x.id === userId)?.username || "";
     showModal(
       'Excluir usu\u00e1rio',
       '<div class="flex items-center gap-3 p-3 bg-red-50 rounded-xl">' +
         '<i class="fas fa-triangle-exclamation text-red-400 text-lg"></i>' +
-        '<div class="text-sm text-dark-600"><p>Excluir <strong>"' + username + '"</strong> e TODO o conte\u00fado?</p><p class="text-xs text-dark-400 mt-1">Notas, pastas, compartilhamentos e hist\u00f3rico ser\u00e3o apagados permanentemente.</p></div>' +
+        '<div class="text-sm text-dark-600"><p>Excluir <strong>"' + esc(username) + '"</strong> e TODO o conte\u00fado?</p><p class="text-xs text-dark-400 mt-1">Notas, pastas, compartilhamentos e hist\u00f3rico ser\u00e3o apagados permanentemente.</p></div>' +
       '</div>',
       async () => {
         try {
@@ -465,6 +457,32 @@ export function adminPage(username: string) {
 
   // ============ INIT ============
   loadOverview();
+
+  // Declarative action routing. No eval, Function, or inline event handlers.
+  const actions = { deleteUser: typeof deleteUser === "function" ? deleteUser : null, filterUsers: typeof filterUsers === "function" ? filterUsers : null, hideModal: typeof hideModal === "function" ? hideModal : null, switchTab: typeof switchTab === "function" ? switchTab : null, toggleAdmin: typeof toggleAdmin === "function" ? toggleAdmin : null };
+  function routeAction(event, attribute) {
+    const el = event.target.closest('[' + attribute + ']');
+    if (!el) return;
+    let expression = el.getAttribute(attribute);
+    if (expression.startsWith('event.stopPropagation();')) { event.stopPropagation(); expression = expression.slice(24); }
+    const match = expression.match(/^(\\w+)\\((.*)\\)$/);
+    if (!match || !Object.hasOwn(actions, match[1]) || !actions[match[1]]) return;
+    const tokens = match[2].trim() ? match[2].split(',').map(x => x.trim()) : [];
+    const args = [];
+    for (const token of tokens) {
+      if (/^\\d+$/.test(token)) args.push(Number(token));
+      else if (token === 'null') args.push(null);
+      else if (token === 'true' || token === 'false') args.push(token === 'true');
+      else if (token === 'event') args.push(event);
+      else if (token === 'state.activeTabId' && typeof state !== 'undefined') args.push(state.activeTabId);
+      else if (/^'[a-zA-Z0-9_-]*'$/.test(token)) args.push(token.slice(1,-1));
+      else return;
+    }
+    Promise.resolve(actions[match[1]](...args)).catch(() => showToast('Não foi possível concluir a operação.', 'fa-exclamation-circle', 'text-red-400'));
+  }
+  document.addEventListener('click', event => routeAction(event, 'data-dt-click'));
+  document.addEventListener('input', event => routeAction(event, 'data-dt-input'));
+  document.addEventListener('contextmenu', event => routeAction(event, 'data-dt-menu'));
   </script>
 </body>
 </html>`;

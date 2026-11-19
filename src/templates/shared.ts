@@ -1,3 +1,4 @@
+import { scriptJson } from '../lib/security'
 // Shared note page template (view / edit)
 
 export function sharedNotePage(note: any, share: any, currentUser: any, editHistory: any[]) {
@@ -11,31 +12,19 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escHtml(note.title || 'Sem título')} - DoutorText</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="/static/manrope.css">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            brand: { 50:'#fffbeb',100:'#fef3c7',200:'#fde68a',300:'#fcd34d',400:'#F5A623',500:'#E8971A',600:'#d97706',700:'#b45309',800:'#92400e',900:'#78350f' },
-            dark: { 50:'#f9fafb',100:'#f3f4f6',200:'#e5e7eb',300:'#d1d5db',400:'#9ca3af',500:'#6b7280',600:'#4b5563',700:'#374151',800:'#1f2937',900:'#111827' }
-          },
-          fontFamily: { sans:['Poppins','sans-serif'], mono:['JetBrains Mono','monospace'] }
-        }
-      }
-    }
-  </script>
+  <link rel="stylesheet" href="/static/utilities.css">
+  <link href="/static/icons/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/static/manrope.css">
+
   <style>
-    *{font-family:'Poppins',sans-serif;margin:0;padding:0;box-sizing:border-box}
+    *{font-family:'Manrope',sans-serif;margin:0;padding:0;box-sizing:border-box}
     .sb::-webkit-scrollbar{width:4px;height:4px}
     .sb::-webkit-scrollbar-track{background:transparent}
     .sb::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:4px}
-    #sharedEditor{font-family:'JetBrains Mono',monospace;font-size:15px;line-height:1.8;resize:none;outline:none}
-    .gradient-brand{background:linear-gradient(135deg,#F5A623 0%,#E8971A 50%,#d97706 100%)}
+    #sharedEditor{font-family:'Manrope',monospace;font-size:15px;line-height:1.8;resize:none;outline:none}
+    .gradient-brand{background:linear-gradient(135deg,#078663 0%,#006c50 50%,#00523e 100%)}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
     .pulse{animation:pulse 2s infinite}
     .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);opacity:0;transition:all .3s ease;z-index:9999;pointer-events:none}
@@ -43,6 +32,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
     @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
     .fade-in{animation:fadeIn .3s ease both}
   </style>
+  <link rel="stylesheet" href="/static/emerald.css">
 </head>
 <body class="bg-dark-50 min-h-screen flex flex-col">
   <!-- Toast -->
@@ -72,7 +62,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
     </div>
     <div class="flex items-center gap-2 sm:gap-3">
       ${canEdit ? `
-      <span id="saveStatus" class="text-xs text-dark-400 hidden sm:inline">
+      <span id="saveStatus" role="status" aria-live="polite" class="text-xs text-dark-400">
         <i class="fas fa-check-circle text-green-500"></i> Salvo
       </span>` : ''}
       ${currentUser ? `
@@ -101,7 +91,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
       ${canEdit ? `
       <input id="sharedTitle" type="text" value="${escHtml(note.title || '')}"
         class="w-full text-2xl sm:text-3xl font-bold text-dark-800 placeholder-dark-300 outline-none border-none bg-transparent mb-2"
-        placeholder="Título da nota..." oninput="onSharedTitleChange()">
+        placeholder="Título da nota..." data-dt-input="onSharedTitleChange()">
       ` : `
       <h1 class="text-2xl sm:text-3xl font-bold text-dark-800 mb-2">${escHtml(note.title || 'Sem título')}</h1>
       `}
@@ -119,7 +109,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
       <div class="flex-1 p-4 sm:p-6">
         <textarea id="sharedEditor" class="w-full h-full bg-transparent text-dark-700 placeholder-dark-300 min-h-[400px]"
           placeholder="Comece a escrever..."
-          oninput="onSharedContentChange()">${escHtml(note.content || '')}</textarea>
+          data-dt-input="onSharedContentChange()">${escHtml(note.content || '')}</textarea>
       </div>
       <div class="px-4 sm:px-6 py-2 border-t border-dark-100 flex items-center justify-between text-[11px] text-dark-400 bg-dark-50/50">
         <div class="flex items-center gap-3 sm:gap-4">
@@ -129,11 +119,11 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
         <span id="lastSaved" class="text-dark-300"></span>
       </div>` : `
       <div class="flex-1 p-4 sm:p-6 sb overflow-y-auto">
-        <pre id="noteContent" class="whitespace-pre-wrap text-dark-700 leading-relaxed" style="font-family:'JetBrains Mono',monospace;font-size:15px">${escHtml(note.content || 'Nota vazia...')}</pre>
+        <pre id="noteContent" class="whitespace-pre-wrap text-dark-700 leading-relaxed" style="font-family:'Manrope',monospace;font-size:15px">${escHtml(note.content || 'Nota vazia...')}</pre>
       </div>
       <div class="px-4 sm:px-6 py-2 border-t border-dark-100 flex items-center justify-between text-[11px] text-dark-400 bg-dark-50/50">
         <span><i class="fas fa-font"></i> ${(note.content || '').length} caracteres</span>
-        <button onclick="copyContent()" class="text-brand-500 hover:text-brand-600 font-medium flex items-center gap-1 transition">
+        <button data-dt-click="copyContent()" class="text-brand-500 hover:text-brand-600 font-medium flex items-center gap-1 transition">
           <i class="far fa-copy"></i> Copiar texto
         </button>
       </div>`}
@@ -142,7 +132,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
     <!-- Edit History -->
     ${editHistory.length > 0 ? `
     <div class="mt-6 fade-in" style="animation-delay:.2s">
-      <button onclick="toggleHistory()" class="flex items-center gap-2 text-sm font-semibold text-dark-500 mb-3 hover:text-dark-700 transition">
+      <button data-dt-click="toggleHistory()" class="flex items-center gap-2 text-sm font-semibold text-dark-500 mb-3 hover:text-dark-700 transition">
         <i class="fas fa-clock-rotate-left text-brand-400"></i>
         Histórico de edições (${editHistory.length})
         <i id="histArrow" class="fas fa-chevron-down text-[10px] transition-transform"></i>
@@ -181,7 +171,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
     </div>` : ''}
   </main>
 
-  <script>
+  <script data-dt-script>
   const SHARE_TOKEN = '${share.share_token}';
   const NOTE_ID = ${note.id};
   const CAN_EDIT = ${canEdit ? 'true' : 'false'};
@@ -189,9 +179,11 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
   let currentVersion = ${note.version || 1};
   let saveTimer = null;
   let dirty = false;
+  let saving = false;
+  let conflict = false;
   let pollTimer = null;
-  let lastContent = ${JSON.stringify(note.content || '')};
-  let lastTitle = ${JSON.stringify(note.title || '')};
+  let lastContent = ${scriptJson(note.content || '')};
+  let lastTitle = ${scriptJson(note.title || '')};
 
   // Toast
   let toastTimeout;
@@ -235,28 +227,28 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
   }
 
   async function saveSharedNote() {
-    if (!dirty) return;
-    const title = document.getElementById('sharedTitle').value;
-    const content = document.getElementById('sharedEditor').value;
+    if (!dirty || saving || conflict) return;
+    saving = true;
     try {
-      updateSaveStatus('saving');
-      const res = await fetch('/api/shared/' + SHARE_TOKEN, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content })
-      });
-      if (!res.ok) throw new Error('Save failed');
-      const data = await res.json();
-      currentVersion = data.version || currentVersion + 1;
-      lastContent = content;
-      lastTitle = title;
-      dirty = false;
+      while (dirty) {
+        const title = document.getElementById('sharedTitle').value;
+        const content = document.getElementById('sharedEditor').value;
+        updateSaveStatus('saving');
+        const res = await fetch('/api/shared/' + SHARE_TOKEN, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, content, version: currentVersion })
+        });
+        if (res.status === 409) { conflict = true; showToast('Conflito: copie seu texto antes de recarregar.', 'fa-exclamation-circle', 'text-red-400'); }
+        if (!res.ok) throw new Error('Save failed');
+        const data = await res.json(); currentVersion = data.version;
+        lastContent = content; lastTitle = title;
+        dirty = content !== document.getElementById('sharedEditor').value || title !== document.getElementById('sharedTitle').value;
+      }
       updateSaveStatus('saved');
-      document.getElementById('lastSaved').textContent = 'Salvo ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-    } catch (e) {
-      updateSaveStatus('error');
-    }
+    } catch (e) { updateSaveStatus('error'); }
+    finally { saving = false; }
   }
+  window.addEventListener('online', saveSharedNote);
 
   function updateSaveStatus(s) {
     const el = document.getElementById('saveStatus');
@@ -272,11 +264,12 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
 
   // Polling for collaborative editing
   async function pollForChanges() {
-    if (dirty) return; // Don't overwrite while user is typing
+    if (dirty || saving || conflict) return; // Don't overwrite while user is typing
     try {
       const res = await fetch('/api/shared/' + SHARE_TOKEN + '/poll?version=' + currentVersion);
       if (!res.ok) return;
       const data = await res.json();
+      if (dirty || saving || conflict) return;
       if (data.changed) {
         const editor = document.getElementById('sharedEditor');
         const titleEl = document.getElementById('sharedTitle');
@@ -315,6 +308,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
       if (!res.ok) return;
       const data = await res.json();
       if (data.changed) {
+        const heading = document.querySelector('main h1'); if (heading) heading.textContent = data.title;
         const content = document.getElementById('noteContent');
         if (content && data.content !== lastContent) {
           content.textContent = data.content;
@@ -329,6 +323,32 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
   }
   pollTimer = setInterval(pollForChanges, 5000);
   `}
+
+  // Declarative action routing. No eval, Function, or inline event handlers.
+  const actions = { copyContent: typeof copyContent === "function" ? copyContent : null, onSharedContentChange: typeof onSharedContentChange === "function" ? onSharedContentChange : null, onSharedTitleChange: typeof onSharedTitleChange === "function" ? onSharedTitleChange : null, toggleHistory: typeof toggleHistory === "function" ? toggleHistory : null };
+  function routeAction(event, attribute) {
+    const el = event.target.closest('[' + attribute + ']');
+    if (!el) return;
+    let expression = el.getAttribute(attribute);
+    if (expression.startsWith('event.stopPropagation();')) { event.stopPropagation(); expression = expression.slice(24); }
+    const match = expression.match(/^(\\w+)\\((.*)\\)$/);
+    if (!match || !Object.hasOwn(actions, match[1]) || !actions[match[1]]) return;
+    const tokens = match[2].trim() ? match[2].split(',').map(x => x.trim()) : [];
+    const args = [];
+    for (const token of tokens) {
+      if (/^\\d+$/.test(token)) args.push(Number(token));
+      else if (token === 'null') args.push(null);
+      else if (token === 'true' || token === 'false') args.push(token === 'true');
+      else if (token === 'event') args.push(event);
+      else if (token === 'state.activeTabId' && typeof state !== 'undefined') args.push(state.activeTabId);
+      else if (/^'[a-zA-Z0-9_-]*'$/.test(token)) args.push(token.slice(1,-1));
+      else return;
+    }
+    Promise.resolve(actions[match[1]](...args)).catch(() => showToast('Não foi possível concluir a operação.', 'fa-exclamation-circle', 'text-red-400'));
+  }
+  document.addEventListener('click', event => routeAction(event, 'data-dt-click'));
+  document.addEventListener('input', event => routeAction(event, 'data-dt-input'));
+  document.addEventListener('contextmenu', event => routeAction(event, 'data-dt-menu'));
   </script>
 </body>
 </html>`;

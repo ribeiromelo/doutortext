@@ -1,0 +1,16 @@
+ALTER TABLE note_shares ADD COLUMN expires_at DATETIME DEFAULT NULL;
+CREATE TABLE IF NOT EXISTS auth_rate_limits (
+  bucket TEXT PRIMARY KEY,
+  attempts INTEGER NOT NULL DEFAULT 1,
+  expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_rate_expiry ON auth_rate_limits(expires_at);
+CREATE TABLE IF NOT EXISTS note_revisions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  edited_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

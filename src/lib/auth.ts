@@ -22,7 +22,7 @@ export async function hashPassword(password: string): Promise<string> {
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const [saltHex, storedHash] = stored.split(':');
-  if (!saltHex || !storedHash) return false;
+  if (!/^[a-f0-9]{32}$/.test(saltHex || '') || !/^[a-f0-9]{64}$/.test(storedHash || '')) return false;
   
   const salt = new Uint8Array(saltHex.match(/.{2}/g)!.map(byte => parseInt(byte, 16)));
   const encoder = new TextEncoder();
@@ -39,7 +39,9 @@ export async function verifyPassword(password: string, stored: string): Promise<
   const hashHex = Array.from(new Uint8Array(derivedBits))
     .map(b => b.toString(16).padStart(2, '0')).join('');
   
-  return hashHex === storedHash;
+  let mismatch = 0;
+  for (let i = 0; i < hashHex.length; i++) mismatch |= hashHex.charCodeAt(i) ^ storedHash.charCodeAt(i);
+  return mismatch === 0;
 }
 
 export function generateSessionId(): string {
