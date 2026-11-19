@@ -1,5 +1,9 @@
 # prod
 dist/
+/public/static/fonts/
+/public/static/icons/
+/public/static/manrope.css
+/public/static/utilities.css
 
 # dev
 .yarn/

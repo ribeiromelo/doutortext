@@ -2,22 +2,26 @@
   "name": "webapp",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run build && npm run preview",
     "build": "vite build",
-    "preview": "wrangler pages dev dist --d1=webapp-production --local --ip 0.0.0.0 --port 3000",
+    "preview": "wrangler pages dev dist --local --ip 127.0.0.1 --port 3000",
     "deploy": "npm run build && wrangler pages deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
-    "db:migrate:local": "wrangler d1 migrations apply webapp-production --local",
+    "db:migrate:local": "wrangler d1 migrations apply doutortext-production --local",
     "db:seed": "wrangler d1 execute webapp-production --local --file=./seed.sql",
-    "db:reset": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local"
+    "db:reset": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local",
+    "assets": "node scripts/assets.mjs && tailwindcss -i src/styles.css -o public/static/utilities.css --minify",
+    "prebuild": "npm run assets"
   },
   "dependencies": {
-    "hono": "^4.12.3"
+    "hono": "^4.13.19"
   },
   "devDependencies": {
-    "@hono/vite-build": "^1.2.0",
-    "@hono/vite-dev-server": "^0.18.2",
-    "vite": "^6.3.5",
-    "wrangler": "^4.4.0"
+    "@fontsource/manrope": "^5.3.0",
+    "@fortawesome/fontawesome-free": "^6.7.2",
+    "@hono/vite-build": "^1.11.1",
+    "tailwindcss": "^3.4.19",
+    "vite": "^8.3.8",
+    "wrangler": "^4.165.0"
   }
 }

@@ -1,8 +1,9 @@
 import { Hono } from 'hono'
-import { cors } from 'hono/cors'
+import { bodyLimit } from 'hono/body-limit'
+import { validId, validNote, publicShareAllowed } from './lib/security'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { hashPassword, verifyPassword, generateSessionId } from './lib/auth'
-import { landingPage, loginPage, registerPage } from './templates/layouts'
+import { baseLayout, landingPage, loginPage, registerPage } from './templates/layouts'
 import { dashboardPage } from './templates/dashboard'
 import { sharedNotePage } from './templates/shared'
 import { adminPage } from './templates/admin'
@@ -20,12 +21,39 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
 // ============================================================
 // MIDDLEWARE
 // ============================================================
-app.use('/api/*', cors())
+app.use('*', bodyLimit({ maxSize: 2100000, onError: c => c.json({ error: 'Conteúdo muito grande' }, 413) }))
 
 app.use('*', async (c, next) => {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && c.req.header('Origin') !== new URL(c.req.url).origin) {
+    return c.json({ error: 'Origem da requisição não permitida' }, 403)
+  }
   await next()
+  if (c.res.headers.get('Content-Type')?.includes('text/html')) {
+    const nonce = generateSessionId()
+    const html = (await c.res.text()).replaceAll('<script data-dt-script>', `<script nonce="${nonce}">`)
+    c.res = new Response(html, { status: c.res.status, headers: c.res.headers })
+    c.res.headers.set('Content-Security-Policy', `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'`)
+  }
   c.res.headers.set('X-Content-Type-Options', 'nosniff')
   c.res.headers.set('X-Frame-Options', 'DENY')
+  c.res.headers.set('Referrer-Policy', 'same-origin')
+  c.res.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  if (new URL(c.req.url).protocol === 'https:') c.res.headers.set('Strict-Transport-Security', 'max-age=31536000')
+  if (c.req.path !== '/' && !c.req.path.startsWith('/static/')) c.res.headers.set('Cache-Control', 'no-store')
+})
+
+// Database-backed counters work across isolates. Only hashed identifiers are stored.
+for (const path of ['/login', '/register']) app.post(path, async (c, next) => {
+  const now = Math.floor(Date.now() / 1000)
+  const ip = c.req.header('CF-Connecting-IP') || 'local'
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ip))
+  const bucket = path + ':' + Array.from(new Uint8Array(hash)).map(x => x.toString(16).padStart(2, '0')).join('')
+  const limit = await c.env.DB.prepare(`INSERT INTO auth_rate_limits(bucket, attempts, expires_at) VALUES (?,1,?)
+    ON CONFLICT(bucket) DO UPDATE SET attempts=CASE WHEN expires_at <= ? THEN 1 ELSE attempts+1 END,
+    expires_at=CASE WHEN expires_at <= ? THEN excluded.expires_at ELSE expires_at END RETURNING attempts`).bind(bucket, now + 900, now, now).first<any>()
+  await c.env.DB.prepare('DELETE FROM auth_rate_limits WHERE expires_at < ?').bind(now - 86400).run()
+  if (limit.attempts > 30) { c.header('Retry-After', '900'); return c.json({ error: 'Muitas tentativas. Tente novamente em 15 minutos.' }, 429) }
+  await next()
 })
 
 // Auth middleware - resolve session
@@ -118,9 +146,9 @@ app.post('/register', async (c) => {
     const password = body.password as string || ''
     const passwordConfirm = body.password_confirm as string || ''
 
-    if (!username || username.length < 3) return c.html(registerPage('Nome de usuário deve ter pelo menos 3 caracteres'))
-    if (!email || !email.includes('@')) return c.html(registerPage('Email inválido'))
-    if (password.length < 6) return c.html(registerPage('Senha deve ter pelo menos 6 caracteres'))
+    if (!/^[\p{L}\p{N}_.-]{3,40}$/u.test(username)) return c.html(registerPage('Use 3 a 40 letras, números, ponto, hífen ou sublinhado.'))
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return c.html(registerPage('Email inválido'))
+    if (password.length < 12 || password.length > 256) return c.html(registerPage('Use uma senha de 12 a 256 caracteres.'))
     if (password !== passwordConfirm) return c.html(registerPage('As senhas não conferem'))
 
     const existing = await c.env.DB.prepare(
@@ -130,13 +158,9 @@ app.post('/register', async (c) => {
 
     const passwordHash = await hashPassword(password)
 
-    // Check if this is the first user - auto-promote to admin
-    const userCount = await c.env.DB.prepare('SELECT COUNT(*) as c FROM users').first()
-    const isFirstUser = (userCount as any)?.c === 0
-
     const result = await c.env.DB.prepare(
       'INSERT INTO users (username, email, password_hash, is_admin) VALUES (?, ?, ?, ?)'
-    ).bind(username, email, passwordHash, isFirstUser ? 1 : 0).run()
+    ).bind(username, email, passwordHash, 0).run()
 
     const userId = result.meta.last_row_id
     const sessionId = generateSessionId()
@@ -148,7 +172,7 @@ app.post('/register', async (c) => {
     setCookie(c, 'session', sessionId, { path: '/', httpOnly: true, secure: true, sameSite: 'Lax', maxAge: 60 * 60 * 24 * 30 })
     return c.redirect('/app')
   } catch (e: any) {
-    return c.html(registerPage('Erro ao criar conta: ' + e.message))
+    return c.html(registerPage('Não foi possível criar a conta. Tente novamente.'))
   }
 })
 
@@ -158,7 +182,7 @@ app.post('/login', async (c) => {
     const login = (body.login as string || '').trim()
     const password = body.password as string || ''
 
-    if (!login || !password) return c.html(loginPage('Preencha todos os campos'))
+    if (!login || !password || login.length > 254 || password.length > 256) return c.html(loginPage('Preencha os campos corretamente.'))
 
     const user = await c.env.DB.prepare(
       'SELECT id, username, email, password_hash FROM users WHERE email = ? OR username = ?'
@@ -177,11 +201,11 @@ app.post('/login', async (c) => {
     setCookie(c, 'session', sessionId, { path: '/', httpOnly: true, secure: true, sameSite: 'Lax', maxAge: 60 * 60 * 24 * 30 })
     return c.redirect('/app')
   } catch (e: any) {
-    return c.html(loginPage('Erro ao entrar: ' + e.message))
+    return c.html(loginPage('Não foi possível entrar. Tente novamente.'))
   }
 })
 
-app.get('/logout', async (c) => {
+app.post('/logout', async (c) => {
   const sessionId = getCookie(c, 'session')
   if (sessionId) {
     await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(sessionId).run()
@@ -318,21 +342,11 @@ app.get('/s/:token', async (c) => {
   const currentUser = await resolveUser(c)
 
   const share = await c.env.DB.prepare(
-    'SELECT * FROM note_shares WHERE share_token = ? AND is_active = 1'
+    'SELECT * FROM note_shares WHERE share_token = ? AND is_active = 1 AND (expires_at IS NULL OR expires_at > datetime(\'now\'))'
   ).bind(token).first()
 
-  if (!share) {
-    return c.html(`<!DOCTYPE html><html><head><title>Não encontrado - DoutorText</title>
-      <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-      <script src="https://cdn.tailwindcss.com"></script>
-      <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
-      </head><body style="font-family:Poppins" class="bg-gray-50 flex items-center justify-center min-h-screen">
-      <div class="text-center p-8"><div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-red-100 flex items-center justify-center">
-      <i class="fas fa-link-slash text-red-400 text-2xl"></i></div>
-      <h1 class="text-2xl font-bold text-gray-800 mb-2">Link inválido ou expirado</h1>
-      <p class="text-gray-500 mb-6">Este compartilhamento não existe mais.</p>
-      <a href="/" class="bg-amber-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-amber-600 transition">Ir para DoutorText</a>
-      </div></body></html>`, 404)
+  if (!share || !publicShareAllowed(share)) {
+    return c.html(baseLayout('Link indisponível', `<main class="auth-content" style="min-height:100dvh;text-align:center"><div class="auth-form"><div class="eyebrow">Compartilhamento</div><h1>Este link não está disponível.</h1><p class="auth-intro">Ele pode ter expirado ou ter sido revogado por quem compartilhou.</p><a class="pill-link" href="/">Ir para DoutorText</a></div></main>`), 404)
   }
 
   // Get note with owner name
@@ -340,7 +354,7 @@ app.get('/s/:token', async (c) => {
     'SELECT n.*, u.username as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?'
   ).bind(share.note_id).first()
 
-  if (!note) {
+  if (!note || note.deleted_at) {
     return c.html('<h1>Nota não encontrada</h1>', 404)
   }
 
@@ -364,27 +378,17 @@ app.put('/api/shared/:token', async (c) => {
   if (!currentUser) return c.json({ error: 'Faça login para editar' }, 401)
 
   const share = await c.env.DB.prepare(
-    'SELECT * FROM note_shares WHERE share_token = ? AND is_active = 1 AND permission = \'edit\''
+    'SELECT * FROM note_shares WHERE share_token = ? AND is_active = 1 AND (expires_at IS NULL OR expires_at > datetime(\'now\')) AND permission = \'edit\''
   ).bind(token).first()
 
-  if (!share) return c.json({ error: 'Sem permissão de edição' }, 403)
+  if (!share || !publicShareAllowed(share)) return c.json({ error: 'Sem permissão de edição' }, 403)
 
-  const { title, content } = await c.req.json()
+  const body = await c.req.json()
+  if (!validNote(body) || typeof body.title !== 'string' || typeof body.content !== 'string') return c.json({ error: 'Nota inválida' }, 400)
+  const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ?').bind(share.note_id).first()
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
+  return persistNote(c, note, body, currentUser)
 
-  // Update note and increment version
-  await c.env.DB.batch([
-    c.env.DB.prepare(
-      'UPDATE notes SET title = ?, content = ?, last_edited_by = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-    ).bind(title, content, currentUser.username, share.note_id),
-    c.env.DB.prepare(
-      'INSERT INTO note_edit_history (note_id, user_id, username, action, summary) VALUES (?, ?, ?, \'edit\', ?)'
-    ).bind(share.note_id, currentUser.id, currentUser.username, `Editou título/conteúdo`)
-  ])
-
-  // Get new version
-  const updated = await c.env.DB.prepare('SELECT version FROM notes WHERE id = ?').bind(share.note_id).first()
-
-  return c.json({ success: true, version: updated?.version || 1 })
 })
 
 // Poll for changes (public)
@@ -393,16 +397,16 @@ app.get('/api/shared/:token/poll', async (c) => {
   const clientVersion = parseInt(c.req.query('version') || '0')
 
   const share = await c.env.DB.prepare(
-    'SELECT note_id FROM note_shares WHERE share_token = ? AND is_active = 1'
+    'SELECT * FROM note_shares WHERE share_token = ? AND is_active = 1 AND (expires_at IS NULL OR expires_at > datetime(\'now\'))'
   ).bind(token).first()
 
-  if (!share) return c.json({ error: 'Share inválido' }, 404)
+  if (!share || !publicShareAllowed(share)) return c.json({ error: 'Share inválido' }, 404)
 
   const note = await c.env.DB.prepare(
-    'SELECT title, content, version, last_edited_by, updated_at FROM notes WHERE id = ?'
+    'SELECT * FROM notes WHERE id = ?'
   ).bind(share.note_id).first()
 
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
 
   const serverVersion = (note.version as number) || 1
   if (serverVersion > clientVersion) {
@@ -429,11 +433,11 @@ app.get('/api/notes/:id/shares', requireAuthAPI(), async (c) => {
   const noteId = parseInt(c.req.param('id'))
 
   // Verify ownership
-  const note = await c.env.DB.prepare('SELECT id FROM notes WHERE id = ? AND user_id = ?').bind(noteId, user.id).first()
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').bind(noteId, user.id).first()
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
 
   const { results } = await c.env.DB.prepare(
-    'SELECT id, share_token, permission, shared_with_email, is_active, created_at FROM note_shares WHERE note_id = ? AND owner_id = ? ORDER BY created_at DESC'
+    'SELECT id, share_token, permission, shared_with_email, is_active, created_at, expires_at FROM note_shares WHERE note_id = ? AND owner_id = ? ORDER BY created_at DESC'
   ).bind(noteId, user.id).all()
 
   return c.json({ shares: results })
@@ -444,17 +448,18 @@ app.post('/api/notes/:id/shares', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const noteId = parseInt(c.req.param('id'))
   const { permission, shared_with_email } = await c.req.json()
+  if (shared_with_email) return c.json({ error: 'Convites por email indisponíveis. Use link com validade de 7 dias.' }, 400)
 
   // Verify ownership
-  const note = await c.env.DB.prepare('SELECT id, title FROM notes WHERE id = ? AND user_id = ?').bind(noteId, user.id).first()
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').bind(noteId, user.id).first()
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
 
   const perm = permission === 'edit' ? 'edit' : 'view'
   const shareToken = generateShareToken()
 
   await c.env.DB.batch([
     c.env.DB.prepare(
-      'INSERT INTO note_shares (note_id, owner_id, share_token, permission, shared_with_email) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO note_shares (note_id, owner_id, share_token, permission, shared_with_email, expires_at) VALUES (?, ?, ?, ?, ?, datetime(\'now\', \'+7 days\'))'
     ).bind(noteId, user.id, shareToken, perm, shared_with_email || null),
     c.env.DB.prepare(
       'INSERT INTO note_edit_history (note_id, user_id, username, action, summary) VALUES (?, ?, ?, \'share\', ?)'
@@ -502,8 +507,8 @@ app.get('/api/notes/:id/history', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const noteId = parseInt(c.req.param('id'))
 
-  const note = await c.env.DB.prepare('SELECT id FROM notes WHERE id = ? AND user_id = ?').bind(noteId, user.id).first()
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').bind(noteId, user.id).first()
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
 
   const { results } = await c.env.DB.prepare(
     'SELECT * FROM note_edit_history WHERE note_id = ? ORDER BY created_at DESC LIMIT 50'
@@ -526,7 +531,7 @@ app.get('/api/folders', requireAuthAPI(), async (c) => {
 app.post('/api/folders', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const { name, parent_id } = await c.req.json()
-  if (!name || !name.trim()) return c.json({ error: 'Nome é obrigatório' }, 400)
+  if (typeof name !== 'string' || name.length > 100 || !name.trim()) return c.json({ error: 'Nome é obrigatório' }, 400)
 
   if (parent_id) {
     const parent = await c.env.DB.prepare('SELECT id FROM folders WHERE id = ? AND user_id = ?').bind(parent_id, user.id).first()
@@ -548,6 +553,19 @@ app.put('/api/folders/:id', requireAuthAPI(), async (c) => {
   const folder = await c.env.DB.prepare('SELECT id FROM folders WHERE id = ? AND user_id = ?').bind(id, user.id).first()
   if (!folder) return c.json({ error: 'Pasta não encontrada' }, 404)
 
+  if (name !== undefined && (typeof name !== 'string' || !name.trim() || name.length > 100)) return c.json({ error: 'Nome inválido' }, 400)
+  if (parent_id != null) {
+    if (!validId(parent_id)) return c.json({ error: 'Pasta inválida' }, 400)
+    const visited = new Set<number>([id])
+    let cursor: number | null = parent_id
+    while (cursor != null) {
+      if (visited.has(cursor) || visited.size > 32) return c.json({ error: 'Hierarquia circular ou muito profunda' }, 400)
+      visited.add(cursor)
+      const parent = await c.env.DB.prepare('SELECT parent_id FROM folders WHERE id = ? AND user_id = ?').bind(cursor, user.id).first<any>()
+      if (!parent) return c.json({ error: 'Pasta pai não encontrada' }, 404)
+      cursor = parent.parent_id
+    }
+  }
   const updates: string[] = []
   const values: any[] = []
   if (name !== undefined) { updates.push('name = ?'); values.push(name.trim()) }
@@ -568,6 +586,7 @@ app.delete('/api/folders/:id', requireAuthAPI(), async (c) => {
   async function getDescendants(parentId: number) {
     const { results } = await c.env.DB.prepare('SELECT id FROM folders WHERE parent_id = ? AND user_id = ?').bind(parentId, user.id).all()
     for (const f of results) {
+      if (allFolderIds.includes(f.id as number)) continue
       allFolderIds.push(f.id as number)
       await getDescendants(f.id as number)
     }
@@ -593,7 +612,7 @@ app.get('/api/notes', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const folderId = c.req.query('folder_id')
 
-  let query = 'SELECT id, title, content, folder_id, is_pinned, last_edited_by, version, created_at, updated_at FROM notes WHERE user_id = ?'
+  let query = 'SELECT * FROM notes WHERE user_id = ?'
   const params: any[] = [user.id]
 
   if (folderId) {
@@ -603,20 +622,22 @@ app.get('/api/notes', requireAuthAPI(), async (c) => {
 
   query += ' ORDER BY is_pinned DESC, updated_at DESC'
   const { results } = await c.env.DB.prepare(query).bind(...params).all()
-  return c.json({ notes: results })
+  return c.json({ notes: results.filter((note: any) => !note.deleted_at) })
 })
 
 app.get('/api/notes/:id', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const id = parseInt(c.req.param('id'))
   const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').bind(id, user.id).first()
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
   return c.json({ note })
 })
 
 app.post('/api/notes', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
-  const { title, content, folder_id } = await c.req.json()
+  const body = await c.req.json()
+  if (!validNote(body)) return c.json({ error: 'Nota inválida' }, 400)
+  const { title, content, folder_id } = body
 
   if (folder_id) {
     const folder = await c.env.DB.prepare('SELECT id FROM folders WHERE id = ? AND user_id = ?').bind(folder_id, user.id).first()
@@ -636,27 +657,23 @@ app.put('/api/notes/:id', requireAuthAPI(), async (c) => {
   const id = parseInt(c.req.param('id'))
   const body = await c.req.json()
 
-  const note = await c.env.DB.prepare('SELECT id FROM notes WHERE id = ? AND user_id = ?').bind(id, user.id).first()
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').bind(id, user.id).first()
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
+  if (!validNote(body)) return c.json({ error: 'Nota inválida' }, 400)
+  if (body.folder_id != null) {
+    if (!validId(body.folder_id)) return c.json({ error: 'Pasta inválida' }, 400)
+    const folder = await c.env.DB.prepare('SELECT id FROM folders WHERE id = ? AND user_id = ?').bind(body.folder_id, user.id).first()
+    if (!folder) return c.json({ error: 'Pasta não encontrada' }, 404)
+  }
+  return persistNote(c, note, body, user)
 
-  const updates: string[] = []
-  const values: any[] = []
-  if (body.title !== undefined) { updates.push('title = ?'); values.push(body.title) }
-  if (body.content !== undefined) { updates.push('content = ?'); values.push(body.content) }
-  if (body.folder_id !== undefined) { updates.push('folder_id = ?'); values.push(body.folder_id) }
-  if (body.is_pinned !== undefined) { updates.push('is_pinned = ?'); values.push(body.is_pinned ? 1 : 0) }
-  updates.push('last_edited_by = ?'); values.push(user.username)
-  updates.push('version = version + 1')
-  updates.push('updated_at = CURRENT_TIMESTAMP')
-  values.push(id, user.id)
-
-  await c.env.DB.prepare(`UPDATE notes SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).bind(...values).run()
-  return c.json({ success: true })
 })
 
 app.delete('/api/notes/:id', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const id = parseInt(c.req.param('id'))
+  const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').bind(id, user.id).first()
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
   // Also delete shares for this note
   await c.env.DB.batch([
     c.env.DB.prepare('DELETE FROM note_shares WHERE note_id = ? AND owner_id = ?').bind(id, user.id),
@@ -665,5 +682,23 @@ app.delete('/api/notes/:id', requireAuthAPI(), async (c) => {
   ])
   return c.json({ success: true })
 })
+
+
+async function persistNote(c: any, note: any, body: any, editor: any) {
+  if (!Number.isSafeInteger(body.version) || body.version !== note.version) return c.json({ error: 'A nota mudou em outra sessão. Seu texto foi mantido; copie-o antes de recarregar.', version: note.version }, 409)
+  const title = body.title ?? note.title
+  const content = body.content ?? note.content
+  const folderId = body.folder_id === undefined ? note.folder_id : body.folder_id
+  const pinned = body.is_pinned === undefined ? note.is_pinned : (body.is_pinned ? 1 : 0)
+  const results = await c.env.DB.batch([
+    c.env.DB.prepare('INSERT INTO note_revisions(note_id, version, title, content, edited_by) SELECT id, version, title, content, ? FROM notes WHERE id = ? AND version = ?').bind(editor.id, note.id, body.version),
+    c.env.DB.prepare('UPDATE notes SET title = ?, content = ?, folder_id = ?, is_pinned = ?, last_edited_by = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND version = ?').bind(title, content, folderId, pinned, editor.username, note.id, body.version)
+  ])
+  if (!results[1].meta.changes) return c.json({ error: 'Conflito de edição. Seu texto foi mantido.', version: note.version }, 409)
+  await c.env.DB.prepare("INSERT INTO note_edit_history(note_id,user_id,username,action,summary) VALUES (?,?,?,'edit','Atualizou a nota')").bind(note.id, editor.id, editor.username).run()
+  return c.json({ success: true, version: body.version + 1 })
+}
+
+app.onError((_error, c) => c.json({ error: 'Não foi possível concluir a operação.' }, 500))
 
 export default app
