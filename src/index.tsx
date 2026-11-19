@@ -354,7 +354,7 @@ app.get('/s/:token', async (c) => {
     'SELECT n.*, u.username as owner_name FROM notes n JOIN users u ON n.user_id = u.id WHERE n.id = ?'
   ).bind(share.note_id).first()
 
-  if (!note) {
+  if (!note || note.deleted_at) {
     return c.html('<h1>Nota não encontrada</h1>', 404)
   }
 
@@ -386,7 +386,7 @@ app.put('/api/shared/:token', async (c) => {
   const body = await c.req.json()
   if (!validNote(body) || typeof body.title !== 'string' || typeof body.content !== 'string') return c.json({ error: 'Nota inválida' }, 400)
   const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ?').bind(share.note_id).first()
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
   return persistNote(c, note, body, currentUser)
 
 })
@@ -403,10 +403,10 @@ app.get('/api/shared/:token/poll', async (c) => {
   if (!share || !publicShareAllowed(share)) return c.json({ error: 'Share inválido' }, 404)
 
   const note = await c.env.DB.prepare(
-    'SELECT title, content, version, last_edited_by, updated_at FROM notes WHERE id = ?'
+    'SELECT * FROM notes WHERE id = ?'
   ).bind(share.note_id).first()
 
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
 
   const serverVersion = (note.version as number) || 1
   if (serverVersion > clientVersion) {
@@ -433,8 +433,8 @@ app.get('/api/notes/:id/shares', requireAuthAPI(), async (c) => {
   const noteId = parseInt(c.req.param('id'))
 
   // Verify ownership
-  const note = await c.env.DB.prepare('SELECT id FROM notes WHERE id = ? AND user_id = ?').bind(noteId, user.id).first()
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').bind(noteId, user.id).first()
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
 
   const { results } = await c.env.DB.prepare(
     'SELECT id, share_token, permission, shared_with_email, is_active, created_at, expires_at FROM note_shares WHERE note_id = ? AND owner_id = ? ORDER BY created_at DESC'
@@ -451,8 +451,8 @@ app.post('/api/notes/:id/shares', requireAuthAPI(), async (c) => {
   if (shared_with_email) return c.json({ error: 'Convites por email indisponíveis. Use link com validade de 7 dias.' }, 400)
 
   // Verify ownership
-  const note = await c.env.DB.prepare('SELECT id, title FROM notes WHERE id = ? AND user_id = ?').bind(noteId, user.id).first()
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').bind(noteId, user.id).first()
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
 
   const perm = permission === 'edit' ? 'edit' : 'view'
   const shareToken = generateShareToken()
@@ -507,8 +507,8 @@ app.get('/api/notes/:id/history', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const noteId = parseInt(c.req.param('id'))
 
-  const note = await c.env.DB.prepare('SELECT id FROM notes WHERE id = ? AND user_id = ?').bind(noteId, user.id).first()
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').bind(noteId, user.id).first()
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
 
   const { results } = await c.env.DB.prepare(
     'SELECT * FROM note_edit_history WHERE note_id = ? ORDER BY created_at DESC LIMIT 50'
@@ -612,7 +612,7 @@ app.get('/api/notes', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const folderId = c.req.query('folder_id')
 
-  let query = 'SELECT id, title, content, folder_id, is_pinned, last_edited_by, version, created_at, updated_at FROM notes WHERE user_id = ?'
+  let query = 'SELECT * FROM notes WHERE user_id = ?'
   const params: any[] = [user.id]
 
   if (folderId) {
@@ -622,14 +622,14 @@ app.get('/api/notes', requireAuthAPI(), async (c) => {
 
   query += ' ORDER BY is_pinned DESC, updated_at DESC'
   const { results } = await c.env.DB.prepare(query).bind(...params).all()
-  return c.json({ notes: results })
+  return c.json({ notes: results.filter((note: any) => !note.deleted_at) })
 })
 
 app.get('/api/notes/:id', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const id = parseInt(c.req.param('id'))
   const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').bind(id, user.id).first()
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
   return c.json({ note })
 })
 
@@ -658,7 +658,7 @@ app.put('/api/notes/:id', requireAuthAPI(), async (c) => {
   const body = await c.req.json()
 
   const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').bind(id, user.id).first()
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
   if (!validNote(body)) return c.json({ error: 'Nota inválida' }, 400)
   if (body.folder_id != null) {
     if (!validId(body.folder_id)) return c.json({ error: 'Pasta inválida' }, 400)
@@ -672,8 +672,8 @@ app.put('/api/notes/:id', requireAuthAPI(), async (c) => {
 app.delete('/api/notes/:id', requireAuthAPI(), async (c) => {
   const user = c.get('user')!
   const id = parseInt(c.req.param('id'))
-  const note = await c.env.DB.prepare('SELECT id FROM notes WHERE id = ? AND user_id = ?').bind(id, user.id).first()
-  if (!note) return c.json({ error: 'Nota não encontrada' }, 404)
+  const note = await c.env.DB.prepare('SELECT * FROM notes WHERE id = ? AND user_id = ?').bind(id, user.id).first()
+  if (!note || note.deleted_at) return c.json({ error: 'Nota não encontrada' }, 404)
   // Also delete shares for this note
   await c.env.DB.batch([
     c.env.DB.prepare('DELETE FROM note_shares WHERE note_id = ? AND owner_id = ?').bind(id, user.id),

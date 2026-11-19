@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 
 // Only run against the disposable local D1 database.
 const origin = 'http://127.0.0.1:3000';
@@ -67,4 +68,15 @@ if(!existing.notes.length) for(const [title,content] of [
   ['Ideias para a semana','PRÓXIMOS PASSOS\n\nOrganizar os materiais de estudo.\nReservar um momento para tirar dúvidas.'],
   ['Um começo mais leve','Nem tudo precisa ficar na memória.\nAlgumas coisas ficam melhores no papel.\n\nPARA HOJE\n\nOrganizar as ideias que surgiram.\nRevisar as referências da semana.\nAbrir espaço para o que vem depois.\n\nLEMBRETES\n\nRegistrar os pontos importantes, um de cada vez.\nVoltar às anotações com calma.']
 ]) await request('/api/notes',{method:'POST',cookie,body:{title,content}});
-console.log('PASS: ownership, history isolation, folder cycles, CSRF, versions, XSS serialization, CSP, sharing and revocation. Local visual fixture ready.');
+if (process.env.TEST_LEGACY_TRASH === '1') {
+  // The production schema has a legacy deleted_at column absent from the old repository.
+  const trash = await (await request('/api/notes',{method:'POST',cookie:a,body:{title:'Trash fixture',content:'Synthetic'}})).json();
+  const trashShare = await (await request('/api/notes/'+trash.note.id+'/shares',{method:'POST',cookie:a,body:{permission:'view'}})).json();
+  execFileSync(process.execPath,['node_modules/wrangler/bin/wrangler.js','d1','execute','doutortext-production','--local','--command',`UPDATE notes SET deleted_at = CURRENT_TIMESTAMP WHERE id = ${trash.note.id}`],{stdio:'pipe'});
+  const listing = await (await request('/api/notes',{cookie:a})).json();
+  assert.ok(!listing.notes.some(n=>n.id===trash.note.id),'legacy trash must remain hidden');
+  assert.equal((await request('/api/notes/'+trash.note.id,{cookie:a})).status,404);
+  assert.equal((await request('/s/'+trashShare.share.share_token)).status,404);
+  assert.equal((await request('/api/shared/'+trashShare.share.share_token+'/poll')).status,404);
+}
+console.log('PASS: ownership, history isolation, folder cycles, CSRF, versions, XSS serialization, CSP, sharing, revocation and optional legacy trash checks. Local visual fixture ready.');
