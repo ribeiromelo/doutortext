@@ -6,7 +6,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, ">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard - DoutorText</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon-emerald.svg">
   <link rel="stylesheet" href="/static/manrope.css">
@@ -63,8 +63,10 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
   </style>
   <link rel="stylesheet" href="/static/emerald.css">
+  <link rel="stylesheet" href="/static/notebook.css">
+  <link rel="stylesheet" href="/static/editor.css">
 </head>
-<body class="dt-workspace bg-dark-50 h-screen flex flex-col overflow-hidden">
+<body class="dt-workspace dt-notebook bg-dark-50 h-screen flex flex-col overflow-hidden">
   <!-- Toast notification -->
   <div id="toast" class="toast bg-dark-800 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium flex items-center gap-2">
     <i id="toastIcon" class="fas fa-check-circle text-green-400"></i>
@@ -108,73 +110,26 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   <!-- Main Content -->
   <div class="flex flex-1 overflow-hidden">
     <!-- Sidebar -->
-    <aside id="sidebar" class="w-64 bg-white border-r border-dark-200 flex flex-col shrink-0">
-      <!-- Mobile close -->
-      <div class="md:hidden p-3 border-b border-dark-100 flex items-center justify-between">
-        <span class="text-sm font-bold text-dark-800">Doutor<span class="text-brand-400">Text</span></span>
-        <button data-dt-click="toggleSidebar()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-dark-100 text-dark-400">
-          <i class="fas fa-times"></i>
-        </button>
+    <aside id="sidebar" aria-label="Biblioteca de notas">
+      <div class="notebook-sidebar-top">
+        <div class="notebook-sidebar-heading"><span>Biblioteca</span><button class="notebook-icon md:hidden" data-dt-click="toggleSidebar()" aria-label="Fechar navegação"><i class="fas fa-xmark" aria-hidden="true"></i></button></div>
+        <button class="notebook-new" data-dt-click="createNote()"><i class="fas fa-plus" aria-hidden="true"></i> Nova anotação</button>
+        <button id="allNotesBtn" class="notebook-library" data-dt-click="loadAllNotes()" aria-current="page"><i class="far fa-file-lines" aria-hidden="true"></i> Todas as notas</button>
       </div>
-      <!-- Sidebar Header -->
-      <div class="p-3 border-b border-dark-100 flex items-center justify-between">
-        <span class="text-xs font-bold text-dark-500 uppercase tracking-wider">Meu espaço</span>
-        <div class="flex items-center gap-0.5">
-          <button data-dt-click="toggleAllFolders(true)" class="w-7 h-7 flex items-center justify-center rounded-lg text-dark-400 hover:bg-dark-100 transition" title="Recolher todas">
-            <i class="fas fa-compress-alt text-[10px]"></i>
-          </button>
-          <button data-dt-click="toggleAllFolders(false)" class="w-7 h-7 flex items-center justify-center rounded-lg text-dark-400 hover:bg-dark-100 transition" title="Expandir todas">
-            <i class="fas fa-expand-alt text-[10px]"></i>
-          </button>
-          <button data-dt-click="createFolder(null)" class="w-7 h-7 flex items-center justify-center rounded-lg text-brand-400 hover:bg-brand-50 transition" title="Nova pasta">
-            <i class="fas fa-folder-plus text-sm"></i>
-          </button>
-        </div>
-      </div>
-
-      <!-- All Notes -->
-      <div class="p-2 border-b border-dark-100">
-        <button data-dt-click="loadAllNotes()" id="allNotesBtn"
-          class="w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium text-dark-600 hover:bg-brand-50 hover:text-brand-600 transition flex items-center gap-2.5">
-          <div class="w-7 h-7 rounded-lg bg-brand-50 flex items-center justify-center shrink-0">
-            <i class="fas fa-file-lines text-brand-400 text-xs"></i>
-          </div>
-          <span>Todas as notas</span>
-        </button>
-      </div>
-
-      <!-- Folder Tree -->
-      <div id="folderTree" class="flex-1 overflow-y-auto sb p-2 space-y-0.5"></div>
-
-      <!-- Sidebar Footer -->
-      <div class="p-3 border-t border-dark-100">
-        <button data-dt-click="createNote()" class="w-full gradient-brand text-white py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition flex items-center justify-center gap-2 shadow-md">
-          <i class="fas fa-plus text-xs"></i> Nova Nota
-        </button>
-      </div>
+      <div class="notebook-folder-heading"><span>Pastas</span><div><button id="outlineToggle" class="notebook-icon" data-dt-click="toggleFolderOutline()" aria-label="Recolher ou expandir todas as pastas" title="Recolher ou expandir pastas"><i class="fas fa-angles-up" aria-hidden="true"></i></button><button class="notebook-icon" data-dt-click="createFolder(null)" aria-label="Nova pasta" title="Nova pasta"><i class="fas fa-folder-plus" aria-hidden="true"></i></button></div></div>
+      <div id="folderTree" class="sb" aria-label="Pastas e subpastas"></div>
+      <section id="notesPanel" aria-label="Índice de anotações">
+        <div class="notebook-index-heading"><span id="notesPanelTitle">Anotações</span><span id="notesCount">0</span></div>
+        <div class="notebook-search"><i class="fas fa-search" aria-hidden="true"></i><input id="searchInput" type="search" aria-label="Buscar nas anotações" placeholder="Buscar anotações…" data-dt-input="filterNotes()"></div>
+        <div id="notesList" class="sb"></div>
+      </section>
+      <div class="notebook-sidebar-footer"><i class="far fa-keyboard" aria-hidden="true"></i><span>Ctrl + S para salvar</span></div>
     </aside>
 
     <!-- Notes List + Editor -->
     <div id="mainArea" class="flex-1 flex overflow-hidden">
-      <!-- Notes List Panel -->
-      <div id="notesPanel" class="w-56 bg-white border-r border-dark-200 flex flex-col shrink-0">
-        <div class="p-3 border-b border-dark-200 flex items-center justify-between">
-          <span id="notesPanelTitle" class="text-xs font-bold text-dark-500 uppercase tracking-wider truncate">Notas</span>
-          <span id="notesCount" class="text-[10px] text-dark-400 bg-dark-100 px-2 py-0.5 rounded-full font-semibold">0</span>
-        </div>
-        <!-- Search -->
-        <div class="p-2 border-b border-dark-100">
-          <div class="relative">
-            <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-dark-300 text-xs"></i>
-            <input id="searchInput" aria-label="Buscar notas" type="text" placeholder="Buscar notas..." data-dt-input="filterNotes()"
-              class="w-full pl-8 pr-3 py-2 text-xs border border-dark-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-brand-400 outline-none bg-dark-50 transition">
-          </div>
-        </div>
-        <div id="notesList" class="flex-1 overflow-y-auto sb"></div>
-      </div>
-
       <!-- Editor Area -->
-      <div class="flex-1 flex flex-col overflow-hidden bg-white">
+      <div id="documentPanel" class="flex-1 flex flex-col overflow-hidden bg-white">
         <!-- Tabs Bar -->
         <div class="border-b border-dark-200 bg-dark-50/50 flex items-center shrink-0 overflow-x-auto sb" id="tabsBar">
           <div id="tabsContainer" class="flex items-center min-w-0"></div>
@@ -196,28 +151,23 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
           </div>
           <div id="editorWrapper" class="flex-1 flex flex-col overflow-hidden hidden">
             <!-- Note title + actions -->
+            <div id="noteBreadcrumb" class="notebook-breadcrumb">Meu espaço</div>
             <button data-dt-click="mobileBack()" class="md:hidden text-sm text-dark-500 text-left px-5 pt-4">Voltar às notas</button>
             <div id="noteHeading" class="px-4 sm:px-6 pt-4 pb-2 shrink-0 flex items-center gap-2">
               <input id="noteTitle" aria-label="Título da nota" type="text" placeholder="Título da nota..."
                 class="flex-1 text-lg sm:text-xl font-bold text-dark-800 placeholder-dark-300 outline-none border-none bg-transparent"
                 data-dt-input="onTitleChange()">
-              <div class="flex items-center gap-1 shrink-0">
-                <button data-dt-click="shareNote(state.activeTabId)" class="w-8 h-8 flex items-center justify-center rounded-lg text-dark-300 hover:text-blue-500 hover:bg-blue-50 transition" title="Compartilhar">
-                  <i class="fas fa-share-nodes text-xs"></i>
-                </button>
-                <button data-dt-click="moveNote(state.activeTabId)" class="w-8 h-8 flex items-center justify-center rounded-lg text-dark-300 hover:text-brand-500 hover:bg-brand-50 transition" title="Mover">
-                  <i class="fas fa-folder-open text-xs"></i>
-                </button>
-                <button data-dt-click="deleteNote(state.activeTabId)" class="w-8 h-8 flex items-center justify-center rounded-lg text-dark-300 hover:text-red-500 hover:bg-red-50 transition" title="Excluir nota">
-                  <i class="fas fa-trash text-xs"></i>
-                </button>
+              <div class="notebook-document-actions">
+                <button class="notebook-action" data-dt-click="copyActiveNote()" aria-label="Copiar anotação" title="Copiar anotação"><i class="far fa-copy" aria-hidden="true"></i><span>Copiar</span></button>
+                <button class="notebook-action" data-dt-click="shareNote(state.activeTabId)" aria-label="Compartilhar anotação" title="Compartilhar"><i class="fas fa-share-nodes" aria-hidden="true"></i></button>
+                <button class="notebook-action" data-dt-click="moveNote(state.activeTabId)" aria-label="Mover anotação" title="Mover"><i class="far fa-folder-open" aria-hidden="true"></i></button>
+                <button class="notebook-action notebook-delete" data-dt-click="deleteNote(state.activeTabId)" aria-label="Excluir anotação" title="Excluir"><i class="far fa-trash-can" aria-hidden="true"></i></button>
               </div>
             </div>
+            <div id="editorToolbar"></div>
             <!-- Text editor -->
             <div id="noteTextPanel" class="flex-1 overflow-y-auto px-4 sm:px-6 pb-6">
-              <textarea id="editor" aria-label="Conteúdo da nota" class="w-full h-full bg-transparent text-dark-700 placeholder-dark-300"
-                placeholder="Comece a escrever..."
-                data-dt-input="onContentChange()"></textarea>
+              <div id="editor"></div>
             </div>
             <!-- Bottom bar -->
             <div class="px-4 sm:px-6 py-2 border-t border-dark-100 flex items-center justify-between text-[11px] text-dark-400 shrink-0 bg-dark-50/50">
@@ -248,6 +198,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     <i class="fas fa-plus"></i>
   </button>
 
+  <script src="/static/rich/editor.js"></script>
   <script data-dt-script>
   // ============================================================
   // STATE
@@ -263,6 +214,9 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     mobileView: 'list' // 'list' | 'editor'
   };
   const API = '/api';
+  let richEditor = null;
+  let renderedNoteId = null;
+  const searchTextCache = new Map();
   const isMobile = () => window.innerWidth < 769;
 
   // ============================================================
@@ -299,14 +253,14 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
 
   function showMobileEditor() {
     if (!isMobile()) return;
-    document.getElementById('notesPanel').style.display = 'none';
+
     document.getElementById('fabBtn').style.display = 'none';
     state.mobileView = 'editor'; document.body.classList.add('editor-open');
   }
 
   function showMobileList() {
     if (!isMobile()) return;
-    document.getElementById('notesPanel').style.display = '';
+
     document.getElementById('fabBtn').style.display = '';
     state.mobileView = 'list'; document.body.classList.remove('editor-open');
   }
@@ -327,10 +281,12 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
 
   window.addEventListener('resize', () => {
     if (!isMobile()) {
-      document.getElementById('notesPanel').style.display = '';
+
       document.getElementById('fabBtn').style.display = '';
       document.getElementById('sidebar').classList.remove('open');
       document.getElementById('sidebarOverlay').classList.remove('show');
+    } else if (state.activeTabId && state.mobileView === 'editor') {
+      document.body.classList.add('editor-open');
     }
   });
 
@@ -358,7 +314,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     if (isFirstLoad) {
       state.folders.forEach(f => {
         // Collapse folders that have children and are not root-level
-        if (f.parent_id !== null && state.folders.some(c => c.parent_id === f.id)) {
+        if ((f.parent_id !== null || state.folders.length > 5) && state.folders.some(c => c.parent_id === f.id)) {
           state.collapsedFolders.add(f.id);
         }
       });
@@ -372,36 +328,25 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
 
   function buildTree(folders, pid, depth) {
     if (depth > 32) return '';
-    const ch = folders.filter(f => f.parent_id === pid);
-    if (!ch.length) return '';
-    return ch.map(f => {
-      const hasCh = folders.some(c => c.parent_id === f.id);
-      const sub = buildTree(folders, f.id, depth + 1);
-      const act = state.activeFolderId === f.id;
-      const pl = 10 + depth * 14;
+    return folders.filter(f => f.parent_id === pid).map(f => {
+      const hasChildren = folders.some(child => child.parent_id === f.id);
       const isCollapsed = state.collapsedFolders.has(f.id);
-      const isOpen = hasCh && !isCollapsed;
-      return \`<div>
-        <div role="button" tabindex="0" class="folder-item flex items-center gap-1 px-2 py-2 rounded-xl cursor-pointer group text-sm
-          \${act ? 'bg-brand-50 text-brand-700' : 'text-dark-600 hover:bg-dark-50'}"
-          style="padding-left:\${pl}px"
-          data-dt-click="selectFolder(\${f.id})"
-          data-dt-menu="showFolderMenu(event,\${f.id})">
-          \${hasCh ? \`<i class="fas fa-caret-right ft text-dark-400 text-[10px] cursor-pointer \${isOpen?'open':''}" data-dt-click="event.stopPropagation();togCh(\${f.id})"></i>\` : '<span class="w-2.5"></span>'}
-          <i class="fas fa-folder \${act ? 'text-brand-400' : 'text-dark-300'} text-xs"></i>
-          <span class="truncate flex-1 font-medium text-xs">\${esc(f.name)}</span>
-          <div class="fa-act flex items-center gap-0.5">
-            <button data-dt-click="event.stopPropagation();createFolder(\${f.id})" class="w-6 h-6 flex items-center justify-center rounded text-dark-300 hover:text-brand-400" title="Subpasta">
-              <i class="fas fa-folder-plus text-[10px]"></i>
-            </button>
-            <button data-dt-click="event.stopPropagation();showFolderMenu(event,\${f.id})" class="w-6 h-6 flex items-center justify-center rounded text-dark-300 hover:text-dark-500">
-              <i class="fas fa-ellipsis-v text-[10px]"></i>
-            </button>
-          </div>
+      const active = state.activeFolderId === f.id;
+      const childMarkup = hasChildren ? buildTree(folders, f.id, depth + 1) : '';
+      return \`<div class="notebook-folder-branch">
+        <div class="folder-item \${active ? 'is-active' : ''}" style="--folder-depth:\${Math.min(depth,8)}" data-dt-menu="showFolderMenu(event,\${f.id})">
+          \${hasChildren ? \`<button class="folder-toggle" data-dt-click="event.stopPropagation();togCh(\${f.id})" aria-label="\${isCollapsed ? 'Expandir' : 'Recolher'} \${esc(f.name)}" aria-expanded="\${!isCollapsed}"><i class="fas fa-chevron-\${isCollapsed ? 'right' : 'down'}" aria-hidden="true"></i></button>\` : '<span class="folder-spacer"></span>'}
+          <button class="folder-select" data-dt-click="selectFolder(\${f.id})" \${active ? 'aria-current="page"' : ''}><i class="far fa-folder\${active ? '-open' : ''}" aria-hidden="true"></i><span>\${esc(f.name)}</span></button>
+          <button class="folder-more" data-dt-click="event.stopPropagation();showFolderMenu(event,\${f.id})" aria-label="Opções da pasta \${esc(f.name)}" title="Opções da pasta"><i class="fas fa-ellipsis" aria-hidden="true"></i></button>
         </div>
-        \${sub ? \`<div class="tree-ch" id="fc-\${f.id}" style="max-height:\${isCollapsed ? '0' : '1000'}px">\${sub}</div>\` : ''}
+        \${childMarkup ? \`<div class="tree-ch" id="fc-\${f.id}" \${isCollapsed ? 'hidden' : ''}>\${childMarkup}</div>\` : ''}
       </div>\`;
     }).join('');
+  }
+
+  function toggleFolderOutline() {
+    const parents = state.folders.filter(f => state.folders.some(child => child.parent_id === f.id));
+    toggleAllFolders(!parents.length || !parents.every(f => state.collapsedFolders.has(f.id)));
   }
 
   async function createFolder(parentId) {
@@ -450,40 +395,32 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
 
   function selectFolder(id) {
     state.activeFolderId = id;
+    document.getElementById('allNotesBtn').removeAttribute('aria-current');
     // Expand parent folders when selecting a nested folder
     expandParents(id);
     renderFolderTree();
     loadNotesByFolder(id);
-    document.getElementById('allNotesBtn').classList.remove('bg-brand-50','text-brand-600');
-    // Close sidebar on mobile
-    if (isMobile()) toggleSidebar();
+    if (isMobile()) {
+      if (document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
+      showMobileList();
+    }
   }
 
   // Ensure all ancestor folders of a given folder are expanded (not collapsed)
   function expandParents(folderId) {
     let folder = state.folders.find(f => f.id === folderId);
-    while (folder && folder.parent_id) {
+    const visited = new Set();
+    while (folder && folder.parent_id && !visited.has(folder.id)) {
+      visited.add(folder.id);
       state.collapsedFolders.delete(folder.parent_id);
       folder = state.folders.find(f => f.id === folder.parent_id);
     }
   }
 
   function togCh(id) {
-    if (state.collapsedFolders.has(id)) {
-      state.collapsedFolders.delete(id);
-    } else {
-      state.collapsedFolders.add(id);
-    }
-    // Update just the DOM for this folder instead of re-rendering entire tree
-    const c = document.getElementById('fc-' + id);
-    const arrow = document.querySelector('[data-dt-click="event.stopPropagation();togCh(' + id + ')"]');
-    if (c) {
-      const isOpen = !state.collapsedFolders.has(id);
-      c.style.maxHeight = isOpen ? '1000px' : '0px';
-      if (arrow) {
-        arrow.classList.toggle('open', isOpen);
-      }
-    }
+    if (state.collapsedFolders.has(id)) state.collapsedFolders.delete(id);
+    else state.collapsedFolders.add(id);
+    renderFolderTree();
   }
 
   // ============================================================
@@ -491,12 +428,13 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   // ============================================================
   async function loadAllNotes() {
     state.activeFolderId = null;
-    document.getElementById('allNotesBtn').classList.add('bg-brand-50','text-brand-600');
+    if (isMobile()) { if (document.getElementById('sidebar').classList.contains('open')) toggleSidebar(); showMobileList(); }
+    document.getElementById('allNotesBtn').setAttribute('aria-current','page');
     renderFolderTree();
     const data = await api('/notes');
     state.notes = data.notes;
     renderNotesList();
-    document.getElementById('notesPanelTitle').textContent = 'Todas as notas';
+    document.getElementById('notesPanelTitle').textContent = 'Anotações';
   }
 
   // Toggle all folders open or collapsed
@@ -519,58 +457,39 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     state.notes = data.notes;
     renderNotesList();
     const f = state.folders.find(x => x.id === folderId);
-    document.getElementById('notesPanelTitle').textContent = f ? f.name : 'Todas as notas';
+    document.getElementById('notesPanelTitle').textContent = f ? f.name : 'Anotações';
   }
 
   function filterNotes() {
-    const q = document.getElementById('searchInput').value.toLowerCase().trim();
-    const items = document.querySelectorAll('#notesList .note-item');
-    items.forEach(el => {
-      const text = el.textContent.toLowerCase();
-      el.style.display = !q || text.includes(q) ? '' : 'none';
+    const q = document.getElementById('searchInput').value.toLocaleLowerCase('pt-BR').trim();
+    let shown = 0;
+    document.querySelectorAll('#notesList .notebook-note-row').forEach(el => {
+      const note = state.notes.find(n => n.id === Number(el.dataset.noteId));
+      if (!q) { el.hidden = false; shown++; return; }
+      const cached = searchTextCache.get(note?.id);
+      const plain = cached?.content === note?.content ? cached.plain : DTRichText.text(note?.content || '');
+      if (note) searchTextCache.set(note.id, {content:note.content, plain});
+      const searchable = ((note?.title || '') + ' ' + plain).toLocaleLowerCase('pt-BR');
+      el.hidden = !!q && !searchable.includes(q); if (!el.hidden) shown++;
     });
+    document.getElementById('notesSearchEmpty').hidden = !state.notes.length || shown > 0;
   }
 
   function renderNotesList() {
     const list = document.getElementById('notesList');
     document.getElementById('notesCount').textContent = state.notes.length;
-    document.getElementById('searchInput').value = '';
-
     if (!state.notes.length) {
-      list.innerHTML = \`
-        <div class="p-6 text-center">
-          <div class="w-14 h-14 mx-auto mb-3 rounded-xl bg-dark-100 flex items-center justify-center">
-            <i class="fas fa-sticky-note text-xl text-dark-300"></i>
-          </div>
-          <p class="text-sm font-medium text-dark-400">Nenhuma nota aqui</p>
-          <p class="text-xs text-dark-300 mt-1">Crie uma nota para começar</p>
-        </div>\`;
+      list.innerHTML = '<div class="notebook-index-empty">Nenhuma anotação aqui.<br>Crie uma para começar.</div><div id="notesSearchEmpty" hidden></div>';
       return;
     }
-
     list.innerHTML = state.notes.map(n => {
-      const hasShares = n.last_edited_by && n.last_edited_by !== ${scriptJson(username)};
-      return \`
-      <div role="button" tabindex="0" class="note-item px-3 py-3 cursor-pointer relative group \${state.activeTabId===n.id?'active':''}"
-        data-dt-click="openNote(\${n.id})"
-        data-dt-menu="showNoteMenu(event,\${n.id})">
-        <div class="flex items-start justify-between gap-2">
-          <div class="min-w-0 flex-1">
-            <div class="font-semibold text-xs text-dark-700 truncate">\${esc(n.title || 'Sem título')}</div>
-            <div class="text-[11px] text-dark-400 mt-0.5 truncate">\${esc((n.content||'').substring(0,80)) || 'Nota vazia...'}</div>
-            <div class="text-[10px] text-dark-300 mt-1 flex items-center gap-2">
-              <span><i class="far fa-clock"></i> \${timeAgo(n.updated_at)}</span>
-              \${hasShares ? \`<span class="text-blue-400"><i class="fas fa-pen-nib"></i> \${esc(n.last_edited_by)}</span>\` : ''}
-            </div>
-          </div>
-          <button data-dt-click="event.stopPropagation();deleteNote(\${n.id})"
-            class="note-del w-7 h-7 flex items-center justify-center rounded-lg text-dark-300 hover:text-red-500 hover:bg-red-50 transition shrink-0 mt-0.5"
-            title="Excluir nota">
-            <i class="fas fa-trash text-[10px]"></i>
-          </button>
-        </div>
+      const active = state.activeTabId === n.id;
+      return \`<div class="notebook-note-row" data-note-id="\${n.id}" data-dt-menu="showNoteMenu(event,\${n.id})">
+        <button type="button" class="note-item \${active ? 'active' : ''}" data-dt-click="openNote(\${n.id})" aria-pressed="\${active}"><i class="far fa-file-lines" aria-hidden="true"></i><span>\${esc(n.title || 'Sem título')}</span>\${state.noteContents[n.id]?.dirty ? '<span class="notebook-unsaved" aria-label="Alterações pendentes"></span>' : ''}</button>
+        <button class="note-more" data-dt-click="event.stopPropagation();showNoteMenu(event,\${n.id})" aria-label="Opções da anotação \${esc(n.title || 'Sem título')}" title="Opções"><i class="fas fa-ellipsis" aria-hidden="true"></i></button>
       </div>\`;
-    }).join('');
+    }).join('') + '<div id="notesSearchEmpty" class="notebook-index-empty" hidden>Nenhuma anotação encontrada.</div>';
+    filterNotes();
   }
 
   async function createNote() {
@@ -589,7 +508,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
       const note = data.note;
       tab = { noteId: id, title: note.title };
       state.openTabs.push(tab);
-      state.noteContents[id] = { title: note.title, content: note.content || '', dirty: false, timer: null, version: note.version, saving: null, conflict: false };
+      state.noteContents[id] = { title: note.title, content: note.content || '', dirty: false, timer: null, version: note.version, saving: null, conflict: false, folderId: note.folder_id, savedAt: note.updated_at };
     }
     state.activeTabId = id;
     renderTabs();
@@ -628,7 +547,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
       if (nc?.dirty) throw new Error('Salve ou resolva o conflito antes de mover.');
       const version = nc ? nc.version : (await api('/notes/' + noteId)).note.version;
       const result = await api('/notes/' + noteId, { method:'PUT', body: JSON.stringify({ folder_id: fid ? parseInt(fid) : null, version }) });
-      if (nc) nc.version = result.version;
+      if (nc) { nc.version = result.version; nc.folderId = fid ? parseInt(fid) : null; renderEditor(); }
       await loadNotesByFolder(state.activeFolderId);
       showToast('Nota movida!', 'fa-folder-open', 'text-brand-400');
     });
@@ -687,13 +606,37 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     const ph = document.getElementById('editorPlaceholder');
     const wr = document.getElementById('editorWrapper');
     if (!state.activeTabId || !state.noteContents[state.activeTabId]) {
+      richEditor?.destroy(); richEditor = null; renderedNoteId = null;
       ph.classList.remove('hidden'); wr.classList.add('hidden'); return;
     }
     ph.classList.add('hidden'); wr.classList.remove('hidden');
     const nc = state.noteContents[state.activeTabId];
     document.getElementById('noteTitle').value = nc.title || '';
-    document.getElementById('editor').value = nc.content || '';
-    updateCounts(nc.content || '');
+    if (renderedNoteId !== state.activeTabId) {
+      richEditor?.destroy();
+      renderedNoteId = state.activeTabId;
+      richEditor = DTRichText.create({
+        element: document.getElementById('editor'), toolbar: document.getElementById('editorToolbar'),
+        content: nc.content || '', label: 'Conteúdo da nota',
+        onChange: (html, plain) => onContentChange(html, plain)
+      });
+    }
+    const path = []; let folder = state.folders.find(f => f.id === nc.folderId); const visited = new Set();
+    while (folder && !visited.has(folder.id)) { visited.add(folder.id); path.unshift(folder.name); folder = state.folders.find(f => f.id === folder.parent_id); }
+    document.getElementById('noteBreadcrumb').textContent = ['Meu espaço', ...path].join(' / ');
+    updateCounts(richEditor.getText());
+    document.getElementById('lastSaved').textContent = nc.dirty ? 'Alterações pendentes' : 'Salvamento automático';
+  }
+
+  async function copyActiveNote() {
+    const nc = state.noteContents[state.activeTabId]; if (!nc) return;
+    const plain = DTRichText.text(nc.content);
+    if (window.ClipboardItem && navigator.clipboard.write) await navigator.clipboard.write([new ClipboardItem({
+      'text/plain': new Blob([plain], {type:'text/plain'}),
+      'text/html': new Blob([DTRichText.prepareHTML(nc.content)], {type:'text/html'})
+    })]);
+    else await navigator.clipboard.writeText(plain);
+    showToast('Anotação copiada', 'fa-copy', 'text-green-400');
   }
 
   function onTitleChange() {
@@ -707,12 +650,12 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     scheduleAutoSave(state.activeTabId);
   }
 
-  function onContentChange() {
+  function onContentChange(html, plain) {
     const nc = state.noteContents[state.activeTabId];
     if (!nc) return;
-    nc.content = document.getElementById('editor').value;
+    nc.content = html;
     nc.dirty = true;
-    updateCounts(nc.content);
+    updateCounts(plain);
     renderTabs();
     scheduleAutoSave(state.activeTabId);
     updateSaveStatus('saving');
@@ -720,7 +663,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
 
   function updateCounts(t) {
     const ch = t.length, w = t.trim() ? t.trim().split(/\\s+/).length : 0, l = t ? t.split('\\n').length : 0;
-    document.getElementById('charCount').innerHTML = '<i class="fas fa-font"></i> ' + ch + ' chars';
+    document.getElementById('charCount').innerHTML = '<i class="fas fa-font"></i> ' + ch + ' caracteres';
     document.getElementById('wordCount').innerHTML = '<i class="fas fa-paragraph"></i> ' + w + ' palavras';
     document.getElementById('lineCount').innerHTML = '<i class="fas fa-list"></i> ' + l + ' linhas';
   }
@@ -1003,7 +946,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   init();
 
   // Declarative action routing. No eval, Function, or inline event handlers.
-  const actions = { closeTab: typeof closeTab === "function" ? closeTab : null, copyShareUrl: typeof copyShareUrl === "function" ? copyShareUrl : null, createFolder: typeof createFolder === "function" ? createFolder : null, createNote: typeof createNote === "function" ? createNote : null, createShare: typeof createShare === "function" ? createShare : null, deleteNote: typeof deleteNote === "function" ? deleteNote : null, filterNotes: typeof filterNotes === "function" ? filterNotes : null, hideModal: typeof hideModal === "function" ? hideModal : null, loadAllNotes: typeof loadAllNotes === "function" ? loadAllNotes : null, mobileBack: typeof mobileBack === "function" ? mobileBack : null, moveNote: typeof moveNote === "function" ? moveNote : null, onContentChange: typeof onContentChange === "function" ? onContentChange : null, onTitleChange: typeof onTitleChange === "function" ? onTitleChange : null, openNote: typeof openNote === "function" ? openNote : null, revokeShare: typeof revokeShare === "function" ? revokeShare : null, selectFolder: typeof selectFolder === "function" ? selectFolder : null, shareNote: typeof shareNote === "function" ? shareNote : null, showFolderMenu: typeof showFolderMenu === "function" ? showFolderMenu : null, showNoteMenu: typeof showNoteMenu === "function" ? showNoteMenu : null, switchTab: typeof switchTab === "function" ? switchTab : null, togCh: typeof togCh === "function" ? togCh : null, toggleAllFolders: typeof toggleAllFolders === "function" ? toggleAllFolders : null, toggleSharePerm: typeof toggleSharePerm === "function" ? toggleSharePerm : null, toggleSidebar: typeof toggleSidebar === "function" ? toggleSidebar : null };
+  const actions = { copyActiveNote, toggleFolderOutline, closeTab: typeof closeTab === "function" ? closeTab : null, copyShareUrl: typeof copyShareUrl === "function" ? copyShareUrl : null, createFolder: typeof createFolder === "function" ? createFolder : null, createNote: typeof createNote === "function" ? createNote : null, createShare: typeof createShare === "function" ? createShare : null, deleteNote: typeof deleteNote === "function" ? deleteNote : null, filterNotes: typeof filterNotes === "function" ? filterNotes : null, hideModal: typeof hideModal === "function" ? hideModal : null, loadAllNotes: typeof loadAllNotes === "function" ? loadAllNotes : null, mobileBack: typeof mobileBack === "function" ? mobileBack : null, moveNote: typeof moveNote === "function" ? moveNote : null, onContentChange: typeof onContentChange === "function" ? onContentChange : null, onTitleChange: typeof onTitleChange === "function" ? onTitleChange : null, openNote: typeof openNote === "function" ? openNote : null, revokeShare: typeof revokeShare === "function" ? revokeShare : null, selectFolder: typeof selectFolder === "function" ? selectFolder : null, shareNote: typeof shareNote === "function" ? shareNote : null, showFolderMenu: typeof showFolderMenu === "function" ? showFolderMenu : null, showNoteMenu: typeof showNoteMenu === "function" ? showNoteMenu : null, switchTab: typeof switchTab === "function" ? switchTab : null, togCh: typeof togCh === "function" ? togCh : null, toggleAllFolders: typeof toggleAllFolders === "function" ? toggleAllFolders : null, toggleSharePerm: typeof toggleSharePerm === "function" ? toggleSharePerm : null, toggleSidebar: typeof toggleSidebar === "function" ? toggleSidebar : null };
   function routeAction(event, attribute) {
     const el = event.target.closest('[' + attribute + ']');
     if (!el) return;

@@ -4,6 +4,7 @@ dist/
 /public/static/icons/
 /public/static/manrope.css
 /public/static/utilities.css
+/public/static/rich/
 
 # dev
 .yarn/
