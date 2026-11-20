@@ -1,3 +1,4 @@
+import { brandLogo } from './brand'
 import { escapeHtml, scriptJson } from '../lib/security'
 // Admin Panel template
 
@@ -34,6 +35,7 @@ export function adminPage(username: string) {
   </style>
   <link rel="stylesheet" href="/static/emerald.css">
   <link rel="stylesheet" href="/static/admin.css">
+  <link rel="stylesheet" href="/static/brand.css">
 </head>
 <body class="admin-app bg-dark-50 min-h-screen">
   <!-- Toast -->
@@ -51,10 +53,7 @@ export function adminPage(username: string) {
   <header class="gradient-dark text-white px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-lg">
     <div class="flex items-center gap-3">
       <a href="/app" class="flex items-center gap-2 hover:opacity-80 transition">
-        <div class="w-8 h-8 gradient-brand rounded-lg flex items-center justify-center shadow-sm">
-          <i class="fas fa-file-medical text-white text-xs"></i>
-        </div>
-        <span class="text-lg font-bold hidden sm:inline">Doutor<span class="text-brand-400">Text</span></span>
+        ${brandLogo('white')}
       </a>
       <div class="h-5 w-px bg-dark-600 hidden sm:block"></div>
       <div class="flex items-center gap-2">

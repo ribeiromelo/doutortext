@@ -1,3 +1,4 @@
+import { brandLogo } from './brand'
 import { scriptJson } from '../lib/security'
 // Shared note page template (view / edit)
 
@@ -34,6 +35,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
   </style>
   <link rel="stylesheet" href="/static/emerald.css">
   <link rel="stylesheet" href="/static/editor.css">
+  <link rel="stylesheet" href="/static/brand.css">
 </head>
 <body class="bg-dark-50 min-h-screen flex flex-col">
   <!-- Toast -->
@@ -45,11 +47,8 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
   <!-- Header -->
   <header class="bg-white border-b border-dark-200 px-4 sm:px-6 py-3 flex items-center justify-between shrink-0">
     <div class="flex items-center gap-3">
-      <a href="/" class="flex items-center gap-2 hover:opacity-80 transition">
-        <div class="w-8 h-8 gradient-brand rounded-lg flex items-center justify-center shadow-sm">
-          <i class="fas fa-file-medical text-white text-xs"></i>
-        </div>
-        <span class="text-lg font-bold text-dark-800 hidden sm:inline">Doutor<span class="text-brand-400">Text</span></span>
+      <a href="/" aria-label="DoutorText, início" class="dt-shared-logo flex items-center gap-2 hover:opacity-80 transition">
+        ${brandLogo('green')}
       </a>
       <div class="h-5 w-px bg-dark-200 hidden sm:block"></div>
       <div class="flex items-center gap-2 text-sm text-dark-500">

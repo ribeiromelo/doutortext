@@ -1,3 +1,4 @@
+import { brandLogo } from './brand'
 import { escapeHtml, scriptJson } from '../lib/security'
 // Dashboard template - Main app interface (responsive + polished)
 
@@ -65,6 +66,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   <link rel="stylesheet" href="/static/emerald.css">
   <link rel="stylesheet" href="/static/notebook.css">
   <link rel="stylesheet" href="/static/editor.css">
+  <link rel="stylesheet" href="/static/brand.css">
 </head>
 <body class="dt-workspace dt-notebook bg-dark-50 h-screen flex flex-col overflow-hidden">
   <!-- Toast notification -->
@@ -80,10 +82,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
       <button id="menuBtn" data-dt-click="toggleSidebar()" class="md:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-dark-100 transition text-dark-500">
         <i class="fas fa-bars"></i>
       </button>
-      <div class="w-8 h-8 gradient-brand rounded-lg flex items-center justify-center shadow-sm">
-        <i class="fas fa-file-medical text-white text-xs"></i>
-      </div>
-      <span class="text-base sm:text-lg font-bold text-dark-800 hidden sm:inline">Doutor<span class="text-brand-400">Text</span></span>
+      <a href="/app" aria-label="DoutorText, início">${brandLogo('white')}</a>
     </div>
     <div class="flex items-center gap-2 sm:gap-4">
       <span id="saveStatus" role="status" aria-live="polite" class="text-xs text-dark-400 save-ind">
