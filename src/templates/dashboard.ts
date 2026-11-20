@@ -116,7 +116,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
         <button class="notebook-new" data-dt-click="createNote()"><i class="fas fa-plus" aria-hidden="true"></i> Nova anotação</button>
         <button id="allNotesBtn" class="notebook-library" data-dt-click="loadAllNotes()" aria-current="page"><i class="far fa-file-lines" aria-hidden="true"></i> Todas as notas</button>
       </div>
-      <div class="notebook-folder-heading"><span>Pastas</span><div><button id="outlineToggle" class="notebook-icon" data-dt-click="toggleFolderOutline()" aria-label="Recolher ou expandir todas as pastas" title="Recolher ou expandir pastas"><i class="fas fa-angles-up" aria-hidden="true"></i></button><button class="notebook-icon" data-dt-click="createFolder(null)" aria-label="Nova pasta" title="Nova pasta"><i class="fas fa-folder-plus" aria-hidden="true"></i></button></div></div>
+      <div class="notebook-folder-heading"><span>Pastas</span><div><button id="outlineToggle" class="notebook-icon" data-dt-click="toggleFolderOutline()" aria-label="Recolher pastas" title="Recolher pastas" aria-expanded="true" aria-controls="folderTree"><i class="fas fa-angles-up" aria-hidden="true"></i></button><button class="notebook-icon" data-dt-click="createFolder(null)" aria-label="Nova pasta" title="Nova pasta"><i class="fas fa-folder-plus" aria-hidden="true"></i></button></div></div>
       <div id="folderTree" class="sb" aria-label="Pastas e subpastas"></div>
       <section id="notesPanel" aria-label="Índice de anotações">
         <div class="notebook-index-heading"><span id="notesPanelTitle">Anotações</span><span id="notesCount">0</span></div>
@@ -132,7 +132,13 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
       <div id="documentPanel" class="flex-1 flex flex-col overflow-hidden bg-white">
         <!-- Tabs Bar -->
         <div class="border-b border-dark-200 bg-dark-50/50 flex items-center shrink-0 overflow-x-auto sb" id="tabsBar">
-          <div id="tabsContainer" class="flex items-center min-w-0"></div>
+          <div id="tabsContainer" class="flex items-center min-w-0" aria-label="Notas abertas"></div>
+          <div class="workspace-tools">
+            <button class="workspace-tool" data-dt-click="manageTabs()" title="Organizar abas" aria-label="Organizar abas"><i class="far fa-window-restore" aria-hidden="true"></i><span>Abas</span></button>
+            <details id="layoutMenu" class="workspace-layout"><summary class="workspace-tool" aria-label="Dividir tela" title="Dividir tela"><i class="fas fa-table-columns" aria-hidden="true"></i><span>Dividir tela</span></summary><div class="workspace-layout-options" aria-label="Divisão da tela">
+              <button data-dt-click="setLayout(1)">Uma nota</button><button data-dt-click="setLayout(2)">2 notas</button><button data-dt-click="setLayout(3)">3 notas</button><button data-dt-click="setLayout(4)">4 notas</button>
+            </div></details>
+          </div>
         </div>
 
         <!-- Editor -->
@@ -149,7 +155,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
               </button>
             </div>
           </div>
-          <div id="editorWrapper" class="flex-1 flex flex-col overflow-hidden hidden">
+          <div id="workspaceGrid" class="workspace-grid" hidden></div><template id="editorPaneTemplate"><section class="notebook-pane flex-1 flex flex-col overflow-hidden">
             <!-- Note title + actions -->
             <div id="noteBreadcrumb" class="notebook-breadcrumb">Meu espaço</div>
             <button data-dt-click="mobileBack()" class="md:hidden text-sm text-dark-500 text-left px-5 pt-4">Voltar às notas</button>
@@ -158,7 +164,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
                 class="flex-1 text-lg sm:text-xl font-bold text-dark-800 placeholder-dark-300 outline-none border-none bg-transparent"
                 data-dt-input="onTitleChange()">
               <div class="notebook-document-actions">
-                <button class="notebook-action" data-dt-click="copyActiveNote()" aria-label="Copiar anotação" title="Copiar anotação"><i class="far fa-copy" aria-hidden="true"></i><span>Copiar</span></button>
+                <button class="notebook-action" data-dt-click="copyActiveNote(state.activeTabId)" aria-label="Copiar anotação" title="Copiar anotação"><i class="far fa-copy" aria-hidden="true"></i><span>Copiar</span></button>
                 <button class="notebook-action" data-dt-click="shareNote(state.activeTabId)" aria-label="Compartilhar anotação" title="Compartilhar"><i class="fas fa-share-nodes" aria-hidden="true"></i></button>
                 <button class="notebook-action" data-dt-click="moveNote(state.activeTabId)" aria-label="Mover anotação" title="Mover"><i class="far fa-folder-open" aria-hidden="true"></i></button>
                 <button class="notebook-action notebook-delete" data-dt-click="deleteNote(state.activeTabId)" aria-label="Excluir anotação" title="Excluir"><i class="far fa-trash-can" aria-hidden="true"></i></button>
@@ -178,7 +184,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
               </div>
               <span id="lastSaved" class="text-dark-300"></span>
             </div>
-          </div>
+          </section></template>
         </div>
       </div>
     </div>
@@ -211,11 +217,12 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     activeFolderId: null,
     noteContents: {},
     collapsedFolders: new Set(), // Track which folders are collapsed
-    mobileView: 'list' // 'list' | 'editor'
+    mobileView: 'list', // 'list' | 'editor'
+    layout: 1, paneIds: [null], activePane: 0, folderSectionCollapsed: false
   };
   const API = '/api';
-  let richEditor = null;
-  let renderedNoteId = null;
+  const paneViews = new Map();
+  const workspaceStorageKey = 'dt-workspace:' + ${scriptJson(username)};
   const searchTextCache = new Map();
   const isMobile = () => window.innerWidth < 769;
 
@@ -239,6 +246,27 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   // ============================================================
   async function init() {
     await Promise.all([loadFolders(), loadAllNotes()]);
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(workspaceStorageKey) || 'null');
+      if (saved && Array.isArray(saved.tabs)) {
+        const ids = [...new Set(saved.tabs.filter(Number.isInteger))].slice(0,40);
+        for (const id of ids) {
+          try { await loadNoteTab(id); } catch (_) { /* Deleted or revoked notes are not restored. */ }
+        }
+        state.layout = [1,2,3,4].includes(saved.layout) ? saved.layout : 1;
+        state.paneIds = Array.from({length:state.layout},(_,i)=>Number.isInteger(saved.panes?.[i]) && state.noteContents[saved.panes[i]] ? saved.panes[i] : null);
+        state.paneIds = state.paneIds.map((id,i,all)=>id && all.indexOf(id)===i ? id : null);
+        state.activePane = Number.isInteger(saved.activePane) ? Math.min(Math.max(saved.activePane,0),state.layout-1) : 0;
+        state.activeTabId = state.paneIds[state.activePane] || null;
+        state.folderSectionCollapsed = !!saved.foldersHidden;
+      }
+    } catch (_) { /* Session storage is optional. */ }
+    renderFolderTree(); renderTabs(); renderEditor(); renderNotesList();
+  }
+
+  function persistWorkspace() {
+    try { sessionStorage.setItem(workspaceStorageKey,JSON.stringify({tabs:state.openTabs.map(t=>t.noteId),layout:state.layout,panes:state.paneIds,activePane:state.activePane,foldersHidden:state.folderSectionCollapsed})); } catch (_) {}
+
   }
 
   // ============================================================
@@ -310,7 +338,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     const isFirstLoad = state.folders.length === 0;
     const data = await api('/folders');
     state.folders = data.folders;
-    // On first load, collapse all subfolders (only root folders visible expanded)
+    // Keep larger folder trees compact on first load.
     if (isFirstLoad) {
       state.folders.forEach(f => {
         // Collapse folders that have children and are not root-level
@@ -323,7 +351,14 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   }
 
   function renderFolderTree() {
-    document.getElementById('folderTree').innerHTML = buildTree(state.folders, null, 0);
+    const tree = document.getElementById('folderTree');
+    tree.innerHTML = buildTree(state.folders, null, 0);
+    tree.hidden = state.folderSectionCollapsed;
+    const toggle = document.getElementById('outlineToggle');
+    const label = state.folderSectionCollapsed ? 'Expandir pastas' : 'Recolher pastas';
+    toggle.setAttribute('aria-expanded',String(!state.folderSectionCollapsed));
+    toggle.setAttribute('aria-label',label); toggle.title=label;
+    toggle.querySelector('i').className='fas fa-angles-' + (state.folderSectionCollapsed ? 'down' : 'up');
   }
 
   function buildTree(folders, pid, depth) {
@@ -345,8 +380,8 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   }
 
   function toggleFolderOutline() {
-    const parents = state.folders.filter(f => state.folders.some(child => child.parent_id === f.id));
-    toggleAllFolders(!parents.length || !parents.every(f => state.collapsedFolders.has(f.id)));
+    state.folderSectionCollapsed = !state.folderSectionCollapsed;
+    renderFolderTree(); persistWorkspace();
   }
 
   async function createFolder(parentId) {
@@ -395,6 +430,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
 
   function selectFolder(id) {
     state.activeFolderId = id;
+    state.folderSectionCollapsed = false;
     document.getElementById('allNotesBtn').removeAttribute('aria-current');
     // Expand parent folders when selecting a nested folder
     expandParents(id);
@@ -501,20 +537,27 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     showToast('Nota criada!');
   }
 
-  async function openNote(id) {
+  async function loadNoteTab(id) {
     let tab = state.openTabs.find(t => t.noteId === id);
     if (!tab) {
       const data = await api('/notes/' + id);
+      if(state.openTabs.some(t=>t.noteId===id))return;
       const note = data.note;
       tab = { noteId: id, title: note.title };
       state.openTabs.push(tab);
       state.noteContents[id] = { title: note.title, content: note.content || '', dirty: false, timer: null, version: note.version, saving: null, conflict: false, folderId: note.folder_id, savedAt: note.updated_at };
     }
-    state.activeTabId = id;
-    renderTabs();
-    renderEditor();
-    renderNotesList();
-    showMobileEditor();
+  }
+
+  async function openNote(id) {
+    await loadNoteTab(id);
+    const existing = state.paneIds.indexOf(id);
+    const empty = state.paneIds.indexOf(null);
+    state.activePane = existing >= 0 ? existing : state.paneIds[state.activePane] === null ? state.activePane : empty >= 0 ? empty : state.activePane;
+    state.paneIds[state.activePane] = id; state.activeTabId = id;
+    renderTabs(); renderEditor(); renderNotesList(); showMobileEditor();
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('show');
   }
 
   async function deleteNote(id) {
@@ -566,25 +609,83 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   function renderTabs() {
     const c = document.getElementById('tabsContainer');
     c.innerHTML = state.openTabs.map(t => {
-      const act = state.activeTabId === t.noteId;
       const nc = state.noteContents[t.noteId];
-      const dirty = nc?.dirty ? '<span class="w-1.5 h-1.5 rounded-full bg-brand-300 inline-block ml-1"></span>' : '';
-      return \`
-        <div role="button" tabindex="0" class="tab-btn flex items-center gap-1.5 px-3 py-2 text-xs cursor-pointer border-r border-dark-200/50 whitespace-nowrap
-          \${act ? 'active' : 'bg-white text-dark-500'}"
-          data-dt-click="switchTab(\${t.noteId})">
-          <span class="max-w-28 truncate">\${esc(nc?.title || t.title || 'Sem título')}</span>\${dirty}
-          <button data-dt-click="event.stopPropagation();closeTab(\${t.noteId})"
-            class="ml-1 w-4 h-4 flex items-center justify-center rounded hover:bg-black/10 transition">
-            <i class="fas fa-times text-[9px]"></i>
-          </button>
-        </div>\`;
+      const title = nc?.title || t.title || 'Sem título';
+      return \`<div class="workspace-tab \${state.activeTabId === t.noteId ? 'active' : ''}" draggable="true" data-tab-id="\${t.noteId}">
+        <button type="button" class="tab-btn" data-dt-click="switchTab(\${t.noteId})" aria-pressed="\${state.activeTabId === t.noteId}" title="\${esc(title)} — arraste para reordenar ou use Alt + setas">
+          <i class="far fa-file-lines" aria-hidden="true"></i><span>\${esc(title)}</span>\${nc?.dirty ? '<span class="notebook-unsaved" aria-label="Alterações pendentes"></span>' : ''}
+        </button><button class="tab-close" data-dt-click="closeTab(\${t.noteId})" aria-label="Fechar aba \${esc(title)}"><i class="fas fa-xmark" aria-hidden="true"></i></button></div>\`;
     }).join('');
+    c.querySelectorAll('[data-tab-id]').forEach(tab => {
+      const id=Number(tab.dataset.tabId);
+      tab.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',String(id));e.dataTransfer.effectAllowed='move';});
+      tab.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';});
+      tab.addEventListener('drop',e=>{e.preventDefault();moveTabTo(Number(e.dataTransfer.getData('text/plain')),id);});
+      tab.querySelector('.tab-btn').addEventListener('keydown',e=>{
+        if(e.altKey && ['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();reorderTab(id,e.key==='ArrowLeft'?0:1);document.querySelector('[data-tab-id="'+id+'"] .tab-btn')?.focus();}
+      });
+    });
+    const active=c.querySelector('.workspace-tab.active'); active?.scrollIntoView({block:'nearest',inline:'nearest'});
+    persistWorkspace();
+    updatePanePickers();
+  }
+
+  function moveTabTo(id,targetId) {
+    const from=state.openTabs.findIndex(t=>t.noteId===id),to=state.openTabs.findIndex(t=>t.noteId===targetId);
+    if(from<0 || to<0 || from===to)return;
+    const [tab]=state.openTabs.splice(from,1);state.openTabs.splice(to,0,tab);renderTabs();
+  }
+
+  function reorderTab(id,direction) {
+    const index=state.openTabs.findIndex(t=>t.noteId===id),target=index+(direction?1:-1);
+    if(target>=0 && target<state.openTabs.length)moveTabTo(id,state.openTabs[target].noteId);
+    if(document.getElementById('tabOrganizer'))manageTabs();
+  }
+
+  function manageTabs() {
+    showModal('Organizar abas',\`<div id="tabOrganizer" class="tab-organizer">\${state.openTabs.map((t,i)=>\`<div><span>\${esc(state.noteContents[t.noteId]?.title || 'Sem título')}</span><button data-dt-click="reorderTab(\${t.noteId},0)" aria-label="Mover \${esc(state.noteContents[t.noteId]?.title || 'aba')} para a esquerda" \${i===0?'disabled':''}><i class="fas fa-arrow-up" aria-hidden="true"></i></button><button data-dt-click="reorderTab(\${t.noteId},1)" aria-label="Mover \${esc(state.noteContents[t.noteId]?.title || 'aba')} para a direita" \${i===state.openTabs.length-1?'disabled':''}><i class="fas fa-arrow-down" aria-hidden="true"></i></button></div>\`).join('') || '<p>Abra uma nota na biblioteca para começar.</p>'}</div>\`,()=>{});
+    document.getElementById('mc').textContent='Concluir';
   }
 
   function switchTab(noteId) {
-    state.activeTabId = noteId;
-    renderTabs(); renderEditor(); renderNotesList();
+    const existing=state.paneIds.indexOf(noteId);
+    if(existing>=0)state.activePane=existing;
+    state.paneIds[state.activePane]=noteId;state.activeTabId=noteId;
+    renderTabs(); renderEditor(); renderNotesList(); showMobileEditor();
+  }
+
+  function setLayout(count) {
+    if(![1,2,3,4].includes(count))return;
+    document.getElementById('layoutMenu').open=false;
+    let ids=state.paneIds.filter(Boolean);
+    if(count===1)ids=state.activeTabId?[state.activeTabId]:[];
+    else if(ids.length>count && state.activeTabId && !ids.slice(0,count).includes(state.activeTabId))ids=[state.activeTabId,...ids.filter(id=>id!==state.activeTabId)];
+    for(const tab of state.openTabs)if(!ids.includes(tab.noteId))ids.push(tab.noteId);
+    state.layout=count;state.paneIds=Array.from({length:count},(_,i)=>ids[i] || null);
+    state.activePane=Math.max(0,state.paneIds.indexOf(state.activeTabId));
+    state.activeTabId=state.paneIds[state.activePane];
+    renderTabs();renderEditor();renderNotesList();
+  }
+
+  function activatePane(slot) {
+    state.activePane=slot;state.activeTabId=state.paneIds[slot];
+    document.querySelectorAll('.workspace-slot').forEach(el=>el.classList.toggle('is-focused',Number(el.dataset.slot)===slot));
+    renderTabs();renderNotesList();
+  }
+
+  function choosePane(slot,id) {
+    const previous=state.paneIds[slot],other=state.paneIds.indexOf(id);
+    if(other>=0 && other!==slot)state.paneIds[other]=previous;
+    state.paneIds[slot]=id;state.activePane=slot;state.activeTabId=id;
+    renderTabs();renderEditor();renderNotesList();
+  }
+
+  function updatePanePickers() {
+    document.querySelectorAll('.pane-note-select').forEach(select=>{
+      const slot=Number(select.dataset.slot);
+      select.innerHTML='<option value="">Escolher nota aberta…</option>'+state.openTabs.map(t=>\`<option value="\${t.noteId}">\${esc(state.noteContents[t.noteId]?.title || 'Sem título')}</option>\`).join('');
+      select.value=state.paneIds[slot] || '';
+    });
   }
 
   async function closeTab(noteId, skipSave) {
@@ -592,44 +693,72 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     if (nc?.dirty && !skipSave) { clearTimeout(nc.timer); await saveNote(noteId); if (nc.dirty) { showToast('Texto pendente. A aba foi mantida aberta.', 'fa-exclamation-circle', 'text-red-400'); return; } }
     state.openTabs = state.openTabs.filter(t => t.noteId !== noteId);
     delete state.noteContents[noteId];
+    state.paneIds=state.paneIds.map(id=>id===noteId?null:id);
     if (state.activeTabId === noteId) {
-      state.activeTabId = state.openTabs.length ? state.openTabs[state.openTabs.length-1].noteId : null;
+      state.activeTabId = state.paneIds.find(Boolean) || state.openTabs[state.openTabs.length-1]?.noteId || null;
+      const visible=state.paneIds.indexOf(state.activeTabId);if(visible>=0)state.activePane=visible;
       if (!state.activeTabId && isMobile()) showMobileList();
     }
+    if(state.activeTabId && !state.paneIds.includes(state.activeTabId))state.paneIds[state.activePane]=state.activeTabId;
     renderTabs(); renderEditor(); renderNotesList();
   }
 
   // ============================================================
   // EDITOR
   // ============================================================
+  function field(view,name) { return view?.element.querySelector('[data-field="'+name+'"]'); }
+
   function renderEditor() {
-    const ph = document.getElementById('editorPlaceholder');
-    const wr = document.getElementById('editorWrapper');
-    if (!state.activeTabId || !state.noteContents[state.activeTabId]) {
-      richEditor?.destroy(); richEditor = null; renderedNoteId = null;
-      ph.classList.remove('hidden'); wr.classList.add('hidden'); return;
+    const grid=document.getElementById('workspaceGrid');
+    const show=state.openTabs.length>0 || state.layout>1;
+    document.getElementById('editorPlaceholder').classList.toggle('hidden',show);
+    grid.hidden=!show; grid.dataset.layout=state.layout;
+    for(const [id,view] of paneViews) {
+      if(!state.paneIds.includes(id) || !show){view.editor.destroy();view.element.remove();paneViews.delete(id);}
     }
-    ph.classList.add('hidden'); wr.classList.remove('hidden');
-    const nc = state.noteContents[state.activeTabId];
-    document.getElementById('noteTitle').value = nc.title || '';
-    if (renderedNoteId !== state.activeTabId) {
-      richEditor?.destroy();
-      renderedNoteId = state.activeTabId;
-      richEditor = DTRichText.create({
-        element: document.getElementById('editor'), toolbar: document.getElementById('editorToolbar'),
-        content: nc.content || '', label: 'Conteúdo da nota',
-        onChange: (html, plain) => onContentChange(html, plain)
-      });
+    // Keep mounted editors when changing focus or layout, preserving selection and undo.
+    const slots=[];
+    if(show)for(let slot=0;slot<state.layout;slot++) {
+      const holder=document.createElement('div');holder.className='workspace-slot';holder.dataset.slot=slot;
+      holder.classList.toggle('is-focused',state.activePane===slot);
+      const bar=document.createElement('div');bar.className='pane-topline';
+      const label=document.createElement('span');label.textContent='Painel '+(slot+1);bar.append(label);
+      const select=document.createElement('select');select.className='pane-note-select';select.dataset.slot=slot;select.setAttribute('aria-label','Nota do painel '+(slot+1));
+      select.addEventListener('change',()=>choosePane(slot,Number(select.value)||null));bar.append(select);
+      const expand=document.createElement('button');expand.type='button';expand.title='Exibir apenas esta nota';expand.setAttribute('aria-label','Ampliar painel '+(slot+1));expand.innerHTML='<i class="fas fa-expand" aria-hidden="true"></i>';
+      expand.addEventListener('click',()=>{activatePane(slot);setLayout(1);});bar.append(expand);holder.append(bar);
+      const id=state.paneIds[slot],nc=state.noteContents[id];
+      if(nc) {
+        let view=paneViews.get(id);
+        if(!view) {
+          const element=document.getElementById('editorPaneTemplate').content.firstElementChild.cloneNode(true);
+          element.setAttribute('aria-label','Editor: '+(nc.title || 'Sem título'));element.setAttribute('role','region');element.dataset.noteId=id;
+          element.querySelectorAll('[id]').forEach(el=>{el.dataset.field=el.id;el.id=el.id+'-'+id;});
+          element.querySelectorAll('[data-dt-click]').forEach(el=>el.setAttribute('data-dt-click',el.getAttribute('data-dt-click').replaceAll('state.activeTabId',String(id))));
+          const title=element.querySelector('[data-field="noteTitle"]');title.removeAttribute('data-dt-input');title.value=nc.title || '';title.addEventListener('input',()=>onTitleChange(id,title.value));
+          view={element,editor:null};paneViews.set(id,view);
+          view.editor=DTRichText.create({element:field(view,'editor'),toolbar:field(view,'editorToolbar'),content:nc.content || '',label:'Conteúdo: '+(nc.title || 'Sem título'),onChange:(html,plain)=>onContentChange(id,html,plain)});
+          updateCounts(id,view.editor.getText());
+          element.addEventListener('focusin',()=>{const index=state.paneIds.indexOf(id);if(index>=0 && state.activePane!==index)activatePane(index);});
+          element.addEventListener('pointerdown',()=>{const index=state.paneIds.indexOf(id);if(index>=0 && state.activePane!==index)activatePane(index);});
+        }
+        const path=[];let folder=state.folders.find(f=>f.id===nc.folderId);const visited=new Set();
+        while(folder && !visited.has(folder.id)){visited.add(folder.id);path.unshift(folder.name);folder=state.folders.find(f=>f.id===folder.parent_id);}
+        field(view,'noteBreadcrumb').textContent=['Meu espaço',...path].join(' / ');
+        field(view,'lastSaved').textContent=nc.conflict?'Conflito — copie o texto antes de recarregar':nc.dirty?'Alterações pendentes':'Salvamento automático';
+        holder.append(view.element);
+      } else {
+        const empty=document.createElement('div');empty.className='pane-empty';
+        empty.innerHTML='<i class="far fa-file-lines" aria-hidden="true"></i><h3>Uma nota neste espaço</h3><p>Escolha uma aba acima ou abra uma nota na biblioteca.</p>';
+        const button=document.createElement('button');button.textContent='Escolher na biblioteca';button.addEventListener('click',()=>{activatePane(slot);if(isMobile()){document.getElementById('sidebar').classList.add('open');document.getElementById('sidebarOverlay').classList.add('show');}else document.getElementById('searchInput').focus();});empty.append(button);holder.append(empty);
+      }
+      slots.push(holder);
     }
-    const path = []; let folder = state.folders.find(f => f.id === nc.folderId); const visited = new Set();
-    while (folder && !visited.has(folder.id)) { visited.add(folder.id); path.unshift(folder.name); folder = state.folders.find(f => f.id === folder.parent_id); }
-    document.getElementById('noteBreadcrumb').textContent = ['Meu espaço', ...path].join(' / ');
-    updateCounts(richEditor.getText());
-    document.getElementById('lastSaved').textContent = nc.dirty ? 'Alterações pendentes' : 'Salvamento automático';
+    grid.replaceChildren(...slots);updatePanePickers();persistWorkspace();
   }
 
-  async function copyActiveNote() {
-    const nc = state.noteContents[state.activeTabId]; if (!nc) return;
+  async function copyActiveNote(noteId = state.activeTabId) {
+    const nc = state.noteContents[noteId]; if (!nc) return;
     const plain = DTRichText.text(nc.content);
     if (window.ClipboardItem && navigator.clipboard.write) await navigator.clipboard.write([new ClipboardItem({
       'text/plain': new Blob([plain], {type:'text/plain'}),
@@ -639,33 +768,24 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     showToast('Anotação copiada', 'fa-copy', 'text-green-400');
   }
 
-  function onTitleChange() {
-    const nc = state.noteContents[state.activeTabId];
-    if (!nc) return;
-    nc.title = document.getElementById('noteTitle').value;
-    nc.dirty = true;
-    const tab = state.openTabs.find(t => t.noteId === state.activeTabId);
-    if (tab) tab.title = nc.title;
-    renderTabs();
-    scheduleAutoSave(state.activeTabId);
+  function onTitleChange(id,title) {
+    const nc=state.noteContents[id];if(!nc)return;
+    nc.title=title;nc.dirty=true;nc.saveError=false;
+    const tab=state.openTabs.find(t=>t.noteId===id);if(tab)tab.title=title;
+    const view=paneViews.get(id);if(view)view.element.setAttribute('aria-label','Editor: '+(title || 'Sem título'));
+    renderTabs();scheduleAutoSave(id);refreshSaveStatus();
   }
 
-  function onContentChange(html, plain) {
-    const nc = state.noteContents[state.activeTabId];
-    if (!nc) return;
-    nc.content = html;
-    nc.dirty = true;
-    updateCounts(plain);
-    renderTabs();
-    scheduleAutoSave(state.activeTabId);
-    updateSaveStatus('saving');
+  function onContentChange(id,html,plain) {
+    const nc=state.noteContents[id];if(!nc)return;
+    nc.content=html;nc.dirty=true;nc.saveError=false;updateCounts(id,plain);renderTabs();scheduleAutoSave(id);refreshSaveStatus();
   }
 
-  function updateCounts(t) {
-    const ch = t.length, w = t.trim() ? t.trim().split(/\\s+/).length : 0, l = t ? t.split('\\n').length : 0;
-    document.getElementById('charCount').innerHTML = '<i class="fas fa-font"></i> ' + ch + ' caracteres';
-    document.getElementById('wordCount').innerHTML = '<i class="fas fa-paragraph"></i> ' + w + ' palavras';
-    document.getElementById('lineCount').innerHTML = '<i class="fas fa-list"></i> ' + l + ' linhas';
+  function updateCounts(id,text) {
+    const view=paneViews.get(id);if(!view)return;
+    field(view,'charCount').textContent=text.length+' caracteres';
+    field(view,'wordCount').textContent=(text.trim()?text.trim().split(/\\s+/).length:0)+' palavras';
+    field(view,'lineCount').textContent=(text?text.split('\\n').length:0)+' linhas';
   }
 
   // ============================================================
@@ -694,16 +814,24 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
           if (n) { n.title = title; n.content = content; n.version = data.version; n.updated_at = new Date().toISOString(); }
         }
         renderTabs(); renderNotesList();
-        updateSaveStatus(Object.values(state.noteContents).some(x => x.dirty) ? 'error' : 'saved');
-        document.getElementById('lastSaved').textContent = 'Salvo às ' + new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+        nc.saveError=false;
+        refreshSaveStatus();
+        const savedField=field(paneViews.get(noteId),'lastSaved');
+        if(savedField && !nc.dirty)savedField.textContent='Salvo às '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
       } catch (e) {
         if (e.status === 409) { nc.conflict = true; showToast('Conflito: copie seu texto antes de recarregar.', 'fa-exclamation-circle', 'text-red-400'); }
-        updateSaveStatus('error');
+        nc.saveError=true;refreshSaveStatus();
       }
     })();
     try { await nc.saving; } finally { nc.saving = null; }
   }
   window.addEventListener('online', () => Object.keys(state.noteContents).forEach(id => saveNote(Number(id))));
+
+  function refreshSaveStatus() {
+    const notes=Object.values(state.noteContents);
+    for(const [id,view] of paneViews){const note=state.noteContents[id];if(note && (note.dirty || note.conflict || note.saveError))field(view,'lastSaved').textContent=note.conflict?'Conflito — copie o texto antes de recarregar':note.saveError?'Falha ao salvar — tente Ctrl+S':'Salvando alterações…';}
+    updateSaveStatus(notes.some(n=>n.conflict || n.saveError)?'error':notes.some(n=>n.dirty)?'saving':'saved');
+  }
 
   function updateSaveStatus(s) {
     const el = document.getElementById('saveStatus');
@@ -929,9 +1057,9 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (state.activeTabId) saveNote(state.activeTabId); }
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); Object.keys(state.noteContents).forEach(id=>saveNote(Number(id))); }
     if ((e.ctrlKey || e.metaKey) && e.key === 'w') { e.preventDefault(); if (state.activeTabId) closeTab(state.activeTabId); }
-    if (e.key === 'Escape') { hideModal(); hideCtx(); }
+    if (e.key === 'Escape') { hideModal(); hideCtx(); document.getElementById('layoutMenu').open=false; }
   });
 
   // Save dirty notes before leaving
@@ -946,7 +1074,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   init();
 
   // Declarative action routing. No eval, Function, or inline event handlers.
-  const actions = { copyActiveNote, toggleFolderOutline, closeTab: typeof closeTab === "function" ? closeTab : null, copyShareUrl: typeof copyShareUrl === "function" ? copyShareUrl : null, createFolder: typeof createFolder === "function" ? createFolder : null, createNote: typeof createNote === "function" ? createNote : null, createShare: typeof createShare === "function" ? createShare : null, deleteNote: typeof deleteNote === "function" ? deleteNote : null, filterNotes: typeof filterNotes === "function" ? filterNotes : null, hideModal: typeof hideModal === "function" ? hideModal : null, loadAllNotes: typeof loadAllNotes === "function" ? loadAllNotes : null, mobileBack: typeof mobileBack === "function" ? mobileBack : null, moveNote: typeof moveNote === "function" ? moveNote : null, onContentChange: typeof onContentChange === "function" ? onContentChange : null, onTitleChange: typeof onTitleChange === "function" ? onTitleChange : null, openNote: typeof openNote === "function" ? openNote : null, revokeShare: typeof revokeShare === "function" ? revokeShare : null, selectFolder: typeof selectFolder === "function" ? selectFolder : null, shareNote: typeof shareNote === "function" ? shareNote : null, showFolderMenu: typeof showFolderMenu === "function" ? showFolderMenu : null, showNoteMenu: typeof showNoteMenu === "function" ? showNoteMenu : null, switchTab: typeof switchTab === "function" ? switchTab : null, togCh: typeof togCh === "function" ? togCh : null, toggleAllFolders: typeof toggleAllFolders === "function" ? toggleAllFolders : null, toggleSharePerm: typeof toggleSharePerm === "function" ? toggleSharePerm : null, toggleSidebar: typeof toggleSidebar === "function" ? toggleSidebar : null };
+  const actions = { setLayout, manageTabs, reorderTab, copyActiveNote, toggleFolderOutline, closeTab: typeof closeTab === "function" ? closeTab : null, copyShareUrl: typeof copyShareUrl === "function" ? copyShareUrl : null, createFolder: typeof createFolder === "function" ? createFolder : null, createNote: typeof createNote === "function" ? createNote : null, createShare: typeof createShare === "function" ? createShare : null, deleteNote: typeof deleteNote === "function" ? deleteNote : null, filterNotes: typeof filterNotes === "function" ? filterNotes : null, hideModal: typeof hideModal === "function" ? hideModal : null, loadAllNotes: typeof loadAllNotes === "function" ? loadAllNotes : null, mobileBack: typeof mobileBack === "function" ? mobileBack : null, moveNote: typeof moveNote === "function" ? moveNote : null, onContentChange: typeof onContentChange === "function" ? onContentChange : null, onTitleChange: typeof onTitleChange === "function" ? onTitleChange : null, openNote: typeof openNote === "function" ? openNote : null, revokeShare: typeof revokeShare === "function" ? revokeShare : null, selectFolder: typeof selectFolder === "function" ? selectFolder : null, shareNote: typeof shareNote === "function" ? shareNote : null, showFolderMenu: typeof showFolderMenu === "function" ? showFolderMenu : null, showNoteMenu: typeof showNoteMenu === "function" ? showNoteMenu : null, switchTab: typeof switchTab === "function" ? switchTab : null, togCh: typeof togCh === "function" ? togCh : null, toggleAllFolders: typeof toggleAllFolders === "function" ? toggleAllFolders : null, toggleSharePerm: typeof toggleSharePerm === "function" ? toggleSharePerm : null, toggleSidebar: typeof toggleSidebar === "function" ? toggleSidebar : null };
   function routeAction(event, attribute) {
     const el = event.target.closest('[' + attribute + ']');
     if (!el) return;

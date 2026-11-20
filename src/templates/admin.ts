@@ -33,8 +33,9 @@ export function adminPage(username: string) {
     .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
   </style>
   <link rel="stylesheet" href="/static/emerald.css">
+  <link rel="stylesheet" href="/static/admin.css">
 </head>
-<body class="bg-dark-50 min-h-screen">
+<body class="admin-app bg-dark-50 min-h-screen">
   <!-- Toast -->
   <div id="toast" class="toast bg-dark-800 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium flex items-center gap-2">
     <i id="toastIcon" class="fas fa-check-circle text-green-400"></i>
@@ -57,12 +58,12 @@ export function adminPage(username: string) {
       </a>
       <div class="h-5 w-px bg-dark-600 hidden sm:block"></div>
       <div class="flex items-center gap-2">
-        <span class="badge bg-red-500/20 text-red-300 border border-red-500/30"><i class="fas fa-shield-halved text-[8px]"></i> Admin</span>
+        <span class="admin-role badge"><i class="fas fa-shield-halved text-[8px]"></i> Admin</span>
       </div>
     </div>
     <div class="flex items-center gap-3">
       <a href="/app" class="text-sm text-dark-300 hover:text-white transition flex items-center gap-1.5">
-        <i class="fas fa-arrow-left text-xs"></i> <span class="hidden sm:inline">Dashboard</span>
+        <i class="fas fa-arrow-left text-xs"></i> <span class="hidden sm:inline">Minhas notas</span>
       </a>
       <div class="flex items-center gap-1.5 text-sm">
         <div class="w-7 h-7 rounded-full gradient-brand flex items-center justify-center text-white text-xs font-bold shadow-sm">
@@ -73,10 +74,10 @@ export function adminPage(username: string) {
     </div>
   </header>
 
-  <!-- Main -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-    <!-- Navigation tabs -->
-    <div class="flex items-center gap-1 mb-6 bg-white rounded-xl border border-dark-200 p-1 overflow-x-auto sb">
+  <div class="admin-shell">
+  <aside class="admin-sidebar">
+    <div class="admin-nav-label">Administração</div>
+    <nav class="admin-nav" aria-label="Administração">
       <button data-dt-click="switchTab('overview')" id="tab-overview" class="admin-tab px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-2 bg-dark-800 text-white">
         <i class="fas fa-chart-pie text-xs"></i> Vis\u00e3o Geral
       </button>
@@ -86,13 +87,16 @@ export function adminPage(username: string) {
       <button data-dt-click="switchTab('activity')" id="tab-activity" class="admin-tab px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-2 text-dark-500 hover:bg-dark-50">
         <i class="fas fa-clock-rotate-left text-xs"></i> Atividade
       </button>
-    </div>
-
+    </nav>
+    <div class="admin-sidebar-bottom"><div class="admin-sidebar-icon"><i class="fas fa-layer-group" aria-hidden="true"></i></div><p>Seu espaço,<br>em perspectiva.</p><span>Acompanhe a comunidade e a organização do DoutorText.</span><a href="/app"><i class="fas fa-arrow-left" aria-hidden="true"></i> Voltar às notas</a></div>
+  </aside>
+  <main class="admin-main">
+    <div class="admin-page-heading"><div><span class="admin-eyebrow">DOUTORTEXT / ADMINISTRAÇÃO</span><h1 id="adminPageTitle">Visão geral</h1><p id="adminPageDescription">Uma visão clara do seu espaço e de quem faz parte dele.</p></div><div class="admin-heading-actions"><span id="adminUpdated" role="status" aria-live="polite"></span><button data-dt-click="refreshAdmin()" class="admin-refresh"><i class="fas fa-arrows-rotate" aria-hidden="true"></i> Atualizar</button></div></div>
     <!-- Tab Content -->
     <div id="content-overview" class="tab-content"></div>
     <div id="content-users" class="tab-content hidden"></div>
     <div id="content-activity" class="tab-content hidden"></div>
-  </main>
+  </main></div>
 
   <script data-dt-script>
   let adminData = { stats: {}, users: [], activity: [] };
@@ -140,23 +144,29 @@ export function adminPage(username: string) {
   }
 
   // ============ TABS ============
-  function switchTab(tab) {
+  async function switchTab(tab) {
+    if (!['overview','users','activity'].includes(tab)) return;
     currentTab = tab;
-    document.querySelectorAll('.admin-tab').forEach(b => {
-      b.classList.remove('bg-dark-800','text-white');
-      b.classList.add('text-dark-500','hover:bg-dark-50');
-    });
-    const active = document.getElementById('tab-' + tab);
-    if (active) {
-      active.classList.add('bg-dark-800','text-white');
-      active.classList.remove('text-dark-500','hover:bg-dark-50');
-    }
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-    document.getElementById('content-' + tab).classList.remove('hidden');
+    const labels={overview:['Visão geral','Uma visão clara do seu espaço e de quem faz parte dele.'],users:['Usuários','Pessoas, permissões e organização da comunidade.'],activity:['Atividade','Acompanhe as edições e os compartilhamentos recentes.']};
+    document.getElementById('adminPageTitle').textContent=labels[tab][0];
+    document.getElementById('adminPageDescription').textContent=labels[tab][1];
+    document.querySelectorAll('.admin-tab').forEach(b=>{if(b.id==='tab-'+tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
+    document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('hidden',c.id!=='content-'+tab));
+    await refreshAdmin();
+  }
 
-    if (tab === 'overview') loadOverview();
-    if (tab === 'users') loadUsers();
-    if (tab === 'activity') loadActivity();
+  async function refreshAdmin() {
+    const tab=currentTab,container=document.getElementById('content-'+tab);
+    const loaders={overview:loadOverview,users:loadUsers,activity:loadActivity};
+    container.setAttribute('aria-busy','true');
+    document.getElementById('adminUpdated').textContent='Atualizando…';
+    try {
+      await loaders[tab]();
+      if(currentTab===tab)document.getElementById('adminUpdated').textContent='Atualizado às '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    } catch (_) {
+      container.innerHTML='<div class="admin-empty" role="alert"><i class="fas fa-cloud-arrow-down" aria-hidden="true"></i><h2>Não foi possível carregar os dados.</h2><p>Tente atualizar novamente.</p><button data-dt-click="refreshAdmin()">Tentar novamente</button></div>';
+      if(currentTab===tab)document.getElementById('adminUpdated').textContent='Falha ao atualizar';
+    } finally {container.removeAttribute('aria-busy');}
   }
 
   // ============ OVERVIEW ============
@@ -169,11 +179,11 @@ export function adminPage(username: string) {
   function renderOverview(s) {
     const el = document.getElementById('content-overview');
     el.innerHTML = \`
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+    <div class="admin-metrics">
       \${statCard('fa-users', 'Usu\u00e1rios', s.total_users, 'blue')}
       \${statCard('fa-sticky-note', 'Notas', s.total_notes, 'amber')}
       \${statCard('fa-folder', 'Pastas', s.total_folders, 'purple')}
-      \${statCard('fa-share-nodes', 'Compart.', s.total_shares, 'green')}
+      \${statCard('fa-share-nodes', 'Compartilhamentos', s.total_shares, 'green')}
       \${statCard('fa-pen-nib', 'Edi\u00e7\u00f5es', s.total_edits, 'pink')}
       \${statCard('fa-key', 'Sess\u00f5es', s.active_sessions, 'cyan')}
     </div>
@@ -188,13 +198,13 @@ export function adminPage(username: string) {
           \${(s.recent_users || []).map(u => \`
             <div class="px-4 py-2.5 flex items-center gap-3 text-sm">
               <div class="w-8 h-8 rounded-full bg-dark-100 flex items-center justify-center text-dark-500 text-xs font-bold shrink-0">
-                \${u.username.charAt(0).toUpperCase()}
+                \${esc(u.username.charAt(0).toUpperCase())}
               </div>
               <div class="flex-1 min-w-0">
                 <div class="font-medium text-dark-700 truncate">\${esc(u.username)}</div>
                 <div class="text-[11px] text-dark-400 truncate">\${esc(u.email)}</div>
               </div>
-              <span class="text-[10px] text-dark-300 shrink-0">\${u.created_at}</span>
+              <span class="text-[10px] text-dark-300 shrink-0">\${esc(formatDate(u.created_at))}</span>
             </div>
           \`).join('') || '<div class="p-4 text-sm text-dark-400 text-center">Nenhum registro</div>'}
         </div>
@@ -203,7 +213,7 @@ export function adminPage(username: string) {
       <!-- Top users by notes -->
       <div class="bg-white rounded-xl border border-dark-200 overflow-hidden">
         <div class="px-4 py-3 border-b border-dark-100">
-          <span class="text-sm font-bold text-dark-700"><i class="fas fa-trophy text-brand-400 mr-2"></i>Top usu\u00e1rios (por notas)</span>
+          <span class="text-sm font-bold text-dark-700"><i class="fas fa-trophy text-brand-400 mr-2"></i>Organização por usuário</span>
         </div>
         <div class="divide-y divide-dark-100 max-h-72 overflow-y-auto sb">
           \${(s.top_users || []).map((u, i) => \`
@@ -243,7 +253,7 @@ export function adminPage(username: string) {
           <div class="font-semibold text-dark-700 mt-0.5">\${s.admin_count || 0}</div>
         </div>
         <div class="bg-dark-50 rounded-lg p-3">
-          <div class="text-[10px] text-dark-400 uppercase font-bold">Shares ativos</div>
+          <div class="text-[10px] text-dark-400 uppercase font-bold">Links ativos</div>
           <div class="font-semibold text-dark-700 mt-0.5">\${s.active_shares || 0}</div>
         </div>
       </div>
@@ -261,7 +271,7 @@ export function adminPage(username: string) {
       cyan: 'bg-cyan-50 text-cyan-600 border-cyan-100',
     };
     const c = colors[color] || colors.blue;
-    return \`<div class="stat-card bg-white rounded-xl border border-dark-200 p-4 text-center">
+    return \`<div class="stat-card admin-metric bg-white rounded-xl border border-dark-200 p-4 text-center">
       <div class="w-10 h-10 rounded-xl \${c} flex items-center justify-center mx-auto mb-2">
         <i class="fas \${icon} text-sm"></i>
       </div>
@@ -285,7 +295,7 @@ export function adminPage(username: string) {
         <span class="text-sm font-bold text-dark-700"><i class="fas fa-users text-brand-400 mr-2"></i>Usu\u00e1rios cadastrados (\${users.length})</span>
         <div class="relative">
           <i class="fas fa-search absolute left-2.5 top-1/2 -translate-y-1/2 text-dark-300 text-xs"></i>
-          <input id="userSearch" type="text" placeholder="Buscar usu\u00e1rio..." data-dt-input="filterUsers()"
+          <input id="userSearch" type="search" aria-label="Buscar usuário" placeholder="Buscar usuário..." data-dt-input="filterUsers()"
             class="pl-8 pr-3 py-2 text-xs border border-dark-200 rounded-lg focus:ring-2 focus:ring-brand-400 outline-none bg-dark-50 w-48">
         </div>
       </div>
@@ -298,14 +308,15 @@ export function adminPage(username: string) {
               <th class="text-left px-4 py-2.5 text-[10px] font-bold text-dark-400 uppercase hidden sm:table-cell">Email</th>
               <th class="text-center px-4 py-2.5 text-[10px] font-bold text-dark-400 uppercase">Notas</th>
               <th class="text-center px-4 py-2.5 text-[10px] font-bold text-dark-400 uppercase hidden md:table-cell">Pastas</th>
-              <th class="text-center px-4 py-2.5 text-[10px] font-bold text-dark-400 uppercase hidden md:table-cell">Shares</th>
-              <th class="text-center px-4 py-2.5 text-[10px] font-bold text-dark-400 uppercase">Role</th>
+              <th class="text-center px-4 py-2.5 text-[10px] font-bold text-dark-400 uppercase hidden md:table-cell">Links</th>
+              <th class="text-center px-4 py-2.5 text-[10px] font-bold text-dark-400 uppercase">Permissão</th>
               <th class="text-left px-4 py-2.5 text-[10px] font-bold text-dark-400 uppercase hidden lg:table-cell">Registrado</th>
               <th class="text-center px-4 py-2.5 text-[10px] font-bold text-dark-400 uppercase">A\u00e7\u00f5es</th>
             </tr>
           </thead>
           <tbody id="usersTableBody">
             \${users.map(u => userRow(u)).join('')}
+            <tr id="usersEmpty" \${users.length ? 'hidden' : ''}><td colspan="9" class="admin-table-empty">Nenhum usuário encontrado.</td></tr>
           </tbody>
         </table>
       </div>
@@ -319,7 +330,7 @@ export function adminPage(username: string) {
       <td class="px-4 py-3">
         <div class="flex items-center gap-2">
           <div class="w-7 h-7 rounded-full \${isAdmin ? 'gradient-brand' : 'bg-dark-100'} flex items-center justify-center text-\${isAdmin ? 'white' : 'dark-500'} text-xs font-bold shrink-0">
-            \${u.username.charAt(0).toUpperCase()}
+            \${esc(u.username.charAt(0).toUpperCase())}
           </div>
           <span class="font-medium text-dark-700">\${esc(u.username)}</span>
         </div>
@@ -331,9 +342,9 @@ export function adminPage(username: string) {
       <td class="px-4 py-3 text-center">
         \${isAdmin
           ? '<span class="badge bg-red-100 text-red-600"><i class="fas fa-shield-halved text-[8px]"></i> Admin</span>'
-          : '<span class="badge bg-dark-100 text-dark-500">User</span>'}
+          : '<span class="badge bg-dark-100 text-dark-500">Usuário</span>'}
       </td>
-      <td class="px-4 py-3 text-[11px] text-dark-400 hidden lg:table-cell">\${u.created_at}</td>
+      <td class="px-4 py-3 text-[11px] text-dark-400 hidden lg:table-cell">\${esc(formatDate(u.created_at))}</td>
       <td class="px-4 py-3 text-center">
         <div class="flex items-center justify-center gap-1">
           \${isAdmin
@@ -353,9 +364,10 @@ export function adminPage(username: string) {
 
   function filterUsers() {
     const q = document.getElementById('userSearch').value.toLowerCase().trim();
-    document.querySelectorAll('.user-row').forEach(r => {
-      r.style.display = !q || r.dataset.search.includes(q) ? '' : 'none';
+    let count=0;document.querySelectorAll('.user-row').forEach(r => {
+      r.hidden=!!q && !r.dataset.search.includes(q);if(!r.hidden)count++;
     });
+    const empty=document.getElementById('usersEmpty');if(empty)empty.hidden=count>0;
   }
 
   async function toggleAdmin(userId, makeAdmin) {
@@ -431,12 +443,12 @@ export function adminPage(username: string) {
             <div class="flex-1 min-w-0">
               <div>
                 <span class="font-medium text-dark-700">\${esc(a.username)}</span>
-                <span class="text-dark-400"> \${a.action === 'share' ? 'compartilhou' : a.action === 'edit' ? 'editou' : a.action}</span>
+                <span class="text-dark-400"> \${a.action === 'share' ? 'compartilhou' : a.action === 'edit' ? 'editou' : esc(a.action)}</span>
                 <span class="text-dark-500 font-medium"> \${esc(a.note_title || 'nota #' + a.note_id)}</span>
               </div>
               \${a.summary ? '<div class="text-[11px] text-dark-300 truncate mt-0.5">' + esc(a.summary) + '</div>' : ''}
             </div>
-            <span class="text-[10px] text-dark-300 shrink-0 whitespace-nowrap">\${a.created_at}</span>
+            <span class="text-[10px] text-dark-300 shrink-0 whitespace-nowrap">\${esc(formatDate(a.created_at))}</span>
           </div>
         \`).join('')}
       </div>
@@ -449,6 +461,12 @@ export function adminPage(username: string) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
+  function formatDate(value) {
+    if(!value)return '—';
+    const date=new Date(value.includes('T')?value:value.replace(' ','T')+'Z');
+    return Number.isNaN(date.getTime())?'—':date.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  }
+
   function formatNum(n) {
     if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
     if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
@@ -456,10 +474,10 @@ export function adminPage(username: string) {
   }
 
   // ============ INIT ============
-  loadOverview();
+  switchTab('overview');
 
   // Declarative action routing. No eval, Function, or inline event handlers.
-  const actions = { deleteUser: typeof deleteUser === "function" ? deleteUser : null, filterUsers: typeof filterUsers === "function" ? filterUsers : null, hideModal: typeof hideModal === "function" ? hideModal : null, switchTab: typeof switchTab === "function" ? switchTab : null, toggleAdmin: typeof toggleAdmin === "function" ? toggleAdmin : null };
+  const actions = { refreshAdmin, deleteUser: typeof deleteUser === "function" ? deleteUser : null, filterUsers: typeof filterUsers === "function" ? filterUsers : null, hideModal: typeof hideModal === "function" ? hideModal : null, switchTab: typeof switchTab === "function" ? switchTab : null, toggleAdmin: typeof toggleAdmin === "function" ? toggleAdmin : null };
   function routeAction(event, attribute) {
     const el = event.target.closest('[' + attribute + ']');
     if (!el) return;
