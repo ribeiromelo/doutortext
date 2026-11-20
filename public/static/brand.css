@@ -1,0 +1,12 @@
+.dt-logo{display:inline-block;position:relative;flex-shrink:0;width:210px;aspect-ratio:1886/381;overflow:hidden;vertical-align:middle;line-height:0}
+.dt-logo>img{display:block;position:absolute;left:-7.68823%;top:-47.76903%;width:115.16437%;height:auto;max-width:none!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+.dt-logo--white>img{filter:brightness(0) invert(1)}
+.lp-header .dt-logo{width:220px}.lp-mini-brand .dt-logo{width:155px}.lp-footer .dt-logo{width:210px}.lp-sheet-footer .dt-logo{width:78px}
+.auth-art>a{position:relative;z-index:2;align-self:flex-start}.auth-art .dt-logo{width:245px}
+.dt-workspace>header .dt-logo{width:195px}.admin-app>header .dt-logo{width:195px}.dt-shared-logo .dt-logo{width:180px}
+@media(max-width:800px){.lp-header .dt-logo{width:200px}}
+@media(max-width:768px){.dt-workspace>header .dt-logo{width:112px}.admin-app>header .dt-logo{width:140px}.dt-shared-logo .dt-logo{width:135px}.auth-art .dt-logo{width:210px}}
+@media(max-width:700px){.lp-header .dt-logo{width:190px}.lp-footer .dt-logo{width:195px}}
+@media(max-width:360px){.dt-workspace>header .dt-logo{width:98px}.lp-header .dt-logo{width:170px}.dt-shared-logo .dt-logo{width:118px}}
+@media(max-width:768px){body.dt-notebook>header{padding-inline:8px!important;column-gap:10px}body.dt-notebook>header .dt-logo{width:108px}}
+@media(max-width:360px){body.dt-notebook>header .dt-logo{width:88px}body.dt-notebook>header{column-gap:6px}}
