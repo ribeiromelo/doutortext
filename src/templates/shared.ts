@@ -33,6 +33,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
     .fade-in{animation:fadeIn .3s ease both}
   </style>
   <link rel="stylesheet" href="/static/emerald.css">
+  <link rel="stylesheet" href="/static/editor.css">
 </head>
 <body class="bg-dark-50 min-h-screen flex flex-col">
   <!-- Toast -->
@@ -106,10 +107,9 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
     <!-- Editor / Viewer -->
     <div class="flex-1 bg-white rounded-2xl border border-dark-200 shadow-sm flex flex-col overflow-hidden fade-in" style="animation-delay:.1s">
       ${canEdit ? `
+      <div id="sharedToolbar"></div>
       <div class="flex-1 p-4 sm:p-6">
-        <textarea id="sharedEditor" class="w-full h-full bg-transparent text-dark-700 placeholder-dark-300 min-h-[400px]"
-          placeholder="Comece a escrever..."
-          data-dt-input="onSharedContentChange()">${escHtml(note.content || '')}</textarea>
+        <div id="sharedEditor"></div>
       </div>
       <div class="px-4 sm:px-6 py-2 border-t border-dark-100 flex items-center justify-between text-[11px] text-dark-400 bg-dark-50/50">
         <div class="flex items-center gap-3 sm:gap-4">
@@ -119,10 +119,10 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
         <span id="lastSaved" class="text-dark-300"></span>
       </div>` : `
       <div class="flex-1 p-4 sm:p-6 sb overflow-y-auto">
-        <pre id="noteContent" class="whitespace-pre-wrap text-dark-700 leading-relaxed" style="font-family:'Manrope',monospace;font-size:15px">${escHtml(note.content || 'Nota vazia...')}</pre>
+        <div id="noteContent" class="dt-rich-document">Carregando anotação…</div>
       </div>
       <div class="px-4 sm:px-6 py-2 border-t border-dark-100 flex items-center justify-between text-[11px] text-dark-400 bg-dark-50/50">
-        <span><i class="fas fa-font"></i> ${(note.content || '').length} caracteres</span>
+        <span id="sharedViewCount">${(note.content || '').length} caracteres</span>
         <button data-dt-click="copyContent()" class="text-brand-500 hover:text-brand-600 font-medium flex items-center gap-1 transition">
           <i class="far fa-copy"></i> Copiar texto
         </button>
@@ -171,6 +171,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
     </div>` : ''}
   </main>
 
+  <script src="/static/rich/editor.js"></script>
   <script data-dt-script>
   const SHARE_TOKEN = '${share.share_token}';
   const NOTE_ID = ${note.id};
@@ -184,6 +185,16 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
   let pollTimer = null;
   let lastContent = ${scriptJson(note.content || '')};
   let lastTitle = ${scriptJson(note.title || '')};
+  let sharedDraftContent = lastContent;
+  let sharedRichEditor = null;
+  if (CAN_EDIT) {
+    sharedRichEditor = DTRichText.create({element:document.getElementById('sharedEditor'),toolbar:document.getElementById('sharedToolbar'),content:lastContent,label:'Conteúdo da nota compartilhada',onChange:(html)=>{sharedDraftContent=html;onSharedContentChange();}});
+    updateCounts();
+  } else {
+    DTRichText.render(document.getElementById('noteContent'), lastContent || 'Nota vazia…');
+    document.getElementById('sharedViewCount').textContent = DTRichText.text(lastContent).length + ' caracteres';
+  }
+
 
   // Toast
   let toastTimeout;
@@ -198,7 +209,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
 
   // Copy
   function copyContent() {
-    const text = document.getElementById('noteContent')?.textContent || '';
+    const text = DTRichText.text(lastContent);
     navigator.clipboard.writeText(text).then(() => showToast('Texto copiado!', 'fa-copy', 'text-blue-400'));
   }
 
@@ -215,7 +226,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
   function onSharedContentChange() { dirty = true; updateCounts(); scheduleAutoSave(); updateSaveStatus('saving'); }
 
   function updateCounts() {
-    const t = document.getElementById('sharedEditor').value;
+    const t = sharedRichEditor.getText();
     const ch = t.length, w = t.trim() ? t.trim().split(/\\s+/).length : 0;
     document.getElementById('charCount').innerHTML = '<i class="fas fa-font"></i> ' + ch + ' chars';
     document.getElementById('wordCount').innerHTML = '<i class="fas fa-paragraph"></i> ' + w + ' palavras';
@@ -232,7 +243,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
     try {
       while (dirty) {
         const title = document.getElementById('sharedTitle').value;
-        const content = document.getElementById('sharedEditor').value;
+        const content = sharedDraftContent;
         updateSaveStatus('saving');
         const res = await fetch('/api/shared/' + SHARE_TOKEN, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -242,7 +253,7 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
         if (!res.ok) throw new Error('Save failed');
         const data = await res.json(); currentVersion = data.version;
         lastContent = content; lastTitle = title;
-        dirty = content !== document.getElementById('sharedEditor').value || title !== document.getElementById('sharedTitle').value;
+        dirty = content !== sharedDraftContent || title !== document.getElementById('sharedTitle').value;
       }
       updateSaveStatus('saved');
     } catch (e) { updateSaveStatus('error'); }
@@ -271,14 +282,14 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
       const data = await res.json();
       if (dirty || saving || conflict) return;
       if (data.changed) {
+        currentVersion = data.version;
         const editor = document.getElementById('sharedEditor');
         const titleEl = document.getElementById('sharedTitle');
         // Only update if content is different and user isn't actively editing
         if (data.content !== lastContent || data.title !== lastTitle) {
-          const cursorPos = editor.selectionStart;
-          if (data.content !== lastContent) { editor.value = data.content; lastContent = data.content; }
+          if (data.content !== lastContent) { sharedRichEditor.setContent(data.content); sharedDraftContent = data.content; lastContent = data.content; }
           if (data.title !== lastTitle) { titleEl.value = data.title; lastTitle = data.title; }
-          editor.setSelectionRange(Math.min(cursorPos, data.content.length), Math.min(cursorPos, data.content.length));
+
           currentVersion = data.version;
           updateCounts();
           if (data.last_edited_by) {
@@ -311,8 +322,9 @@ export function sharedNotePage(note: any, share: any, currentUser: any, editHist
         const heading = document.querySelector('main h1'); if (heading) heading.textContent = data.title;
         const content = document.getElementById('noteContent');
         if (content && data.content !== lastContent) {
-          content.textContent = data.content;
+          DTRichText.render(content, data.content);
           lastContent = data.content;
+          document.getElementById('sharedViewCount').textContent = DTRichText.text(lastContent).length + ' caracteres';
         }
         currentVersion = data.version;
         if (data.last_edited_by) {
