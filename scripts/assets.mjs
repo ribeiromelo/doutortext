@@ -8,3 +8,7 @@ writeFileSync('public/static/manrope.css',readFileSync('public/static/manrope.cs
 mkdirSync('public/static/icons/css',{recursive:true});
 copyFileSync('node_modules/@fortawesome/fontawesome-free/css/all.min.css','public/static/icons/css/all.min.css');
 cpSync('node_modules/@fortawesome/fontawesome-free/webfonts','public/static/icons/webfonts',{recursive:true});
+
+import { readdirSync } from 'node:fs';
+for (const file of readdirSync('node_modules/@fontsource/inter/files').filter(f=>f.startsWith('inter-latin-'))) copyFileSync('node_modules/@fontsource/inter/files/'+file,'public/static/fonts/'+file);
+writeFileSync('public/static/inter.css',readFileSync('node_modules/@fontsource/inter/latin.css','utf8').replaceAll('./files/','./fonts/'));

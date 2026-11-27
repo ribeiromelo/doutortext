@@ -8,8 +8,22 @@
     "lib": [
       "ESNext"
     ],
-    "types": ["vite/client"],
+    "types": [
+      "vite/client",
+      "@cloudflare/workers-types"
+    ],
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx"
   },
+  "exclude": [
+    "node_modules",
+    "dist"
+  ],
+  "include": [
+    "src/index.tsx",
+    "src/routes/**/*.ts",
+    "src/lib/**/*.ts",
+    "src/templates/**/*.ts",
+    "vite*.ts"
+  ]
 }

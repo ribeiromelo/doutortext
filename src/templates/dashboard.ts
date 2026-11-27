@@ -1,3 +1,4 @@
+import { dashboardHome } from './dashboard-home'
 import { brandLogo } from './brand'
 import { escapeHtml, scriptJson } from '../lib/security'
 // Dashboard template - Main app interface (responsive + polished)
@@ -67,8 +68,10 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   <link rel="stylesheet" href="/static/notebook.css">
   <link rel="stylesheet" href="/static/editor.css">
   <link rel="stylesheet" href="/static/brand.css">
+  <link rel="stylesheet" href="/static/inter.css">
+  <link rel="stylesheet" href="/static/dashboard-home.css">
 </head>
-<body class="dt-workspace dt-notebook bg-dark-50 h-screen flex flex-col overflow-hidden">
+<body class="dt-workspace dt-notebook home-open bg-dark-50 h-screen flex flex-col overflow-hidden">
   <!-- Toast notification -->
   <div id="toast" class="toast bg-dark-800 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium flex items-center gap-2">
     <i id="toastIcon" class="fas fa-check-circle text-green-400"></i>
@@ -131,6 +134,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
       <div id="documentPanel" class="flex-1 flex flex-col overflow-hidden bg-white">
         <!-- Tabs Bar -->
         <div class="border-b border-dark-200 bg-dark-50/50 flex items-center shrink-0 overflow-x-auto sb" id="tabsBar">
+          <button type="button" class="workspace-tool dh-home-button" data-dt-click="showDashboardHome()" aria-label="Página inicial" title="Página inicial"><i class="fas fa-house" aria-hidden="true"></i><span>Início</span></button>
           <div id="tabsContainer" class="flex items-center min-w-0" aria-label="Notas abertas"></div>
           <div class="workspace-tools">
             <button class="workspace-tool" data-dt-click="manageTabs()" title="Organizar abas" aria-label="Organizar abas"><i class="far fa-window-restore" aria-hidden="true"></i><span>Abas</span></button>
@@ -142,18 +146,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
 
         <!-- Editor -->
         <div id="editorArea" class="flex-1 flex flex-col overflow-hidden">
-          <div id="editorPlaceholder" class="flex-1 flex items-center justify-center text-dark-300">
-            <div class="text-center px-6">
-              <div class="w-20 h-20 mx-auto mb-5 rounded-2xl bg-dark-100 flex items-center justify-center">
-                <i class="fas fa-file-pen text-3xl text-dark-300"></i>
-              </div>
-              <p class="text-lg font-semibold text-dark-400">Um espaço para suas ideias.</p>
-              <p class="text-sm mt-1.5 text-dark-300">Abra uma nota ao lado ou comece uma nova história.</p>
-              <button data-dt-click="createNote()" class="mt-5 gradient-brand text-white px-5 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-md inline-flex items-center gap-2">
-                <i class="fas fa-plus text-xs"></i> Criar nota
-              </button>
-            </div>
-          </div>
+          ${dashboardHome(username)}
           <div id="workspaceGrid" class="workspace-grid" hidden></div><template id="editorPaneTemplate"><section class="notebook-pane flex-1 flex flex-col overflow-hidden">
             <!-- Note title + actions -->
             <div id="noteBreadcrumb" class="notebook-breadcrumb">Meu espaço</div>
@@ -204,6 +197,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   </button>
 
   <script src="/static/rich/editor.js"></script>
+  <script src="/static/dashboard-app/dashboard.js"></script>
   <script data-dt-script>
   // ============================================================
   // STATE
@@ -216,6 +210,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     activeFolderId: null,
     noteContents: {},
     collapsedFolders: new Set(), // Track which folders are collapsed
+    showHome: true,
     mobileView: 'list', // 'list' | 'editor'
     layout: 1, paneIds: [null], activePane: 0, folderSectionCollapsed: false
   };
@@ -224,6 +219,18 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   const workspaceStorageKey = 'dt-workspace:' + ${scriptJson(username)};
   const searchTextCache = new Map();
   const isMobile = () => window.innerWidth < 769;
+
+  const home = DTDashboard.createHome({root:document.getElementById('dashboardHome'),onCreate:createNote,onOpen:openNote,onAll:showAllHomeNotes});
+  function showDashboardHome() {
+    state.showHome=true;document.body.classList.add('home-open');document.body.classList.remove('editor-open');
+    document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarOverlay').classList.remove('show');
+    renderTabs();renderEditor();
+  }
+  function showAllHomeNotes() { loadAllNotes();document.getElementById('searchInput').focus(); }
+  function recordNoteAccess(id) {
+    const eventId=crypto.randomUUID();
+    api('/notes/'+id+'/access',{method:'POST',body:JSON.stringify({event_id:eventId})}).then(()=>home.invalidate()).catch(()=>{});
+  }
 
   // ============================================================
   // API
@@ -260,7 +267,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
         state.folderSectionCollapsed = !!saved.foldersHidden;
       }
     } catch (_) { /* Session storage is optional. */ }
-    renderFolderTree(); renderTabs(); renderEditor(); renderNotesList();
+    state.showHome=true;renderFolderTree(); renderTabs(); renderEditor(); renderNotesList();
   }
 
   function persistWorkspace() {
@@ -287,7 +294,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
 
   function showMobileList() {
     if (!isMobile()) return;
-
+    state.showHome=false;document.body.classList.remove('home-open');home.setVisible(false);
     document.getElementById('fabBtn').style.display = '';
     state.mobileView = 'list'; document.body.classList.remove('editor-open');
   }
@@ -532,7 +539,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     if (state.activeFolderId) body.folder_id = state.activeFolderId;
     const data = await api('/notes', { method:'POST', body: JSON.stringify(body) });
     await loadNotesByFolder(state.activeFolderId);
-    openNote(data.note.id);
+    await openNote(data.note.id);
     showToast('Nota criada!');
   }
 
@@ -549,7 +556,10 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   }
 
   async function openNote(id) {
+    const countAccess=state.showHome || state.activeTabId!==id;
     await loadNoteTab(id);
+    state.showHome=false;document.body.classList.remove('home-open');
+    if(countAccess)recordNoteAccess(id);
     const existing = state.paneIds.indexOf(id);
     const empty = state.paneIds.indexOf(null);
     state.activePane = existing >= 0 ? existing : state.paneIds[state.activePane] === null ? state.activePane : empty >= 0 ? empty : state.activePane;
@@ -569,6 +579,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
       await api('/notes/' + id, { method:'DELETE' });
       closeTab(id, true);
       await loadNotesByFolder(state.activeFolderId);
+      home.invalidate();
       showToast('Nota excluída', 'fa-trash', 'text-red-400');
     }, true);
   }
@@ -610,8 +621,8 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     c.innerHTML = state.openTabs.map(t => {
       const nc = state.noteContents[t.noteId];
       const title = nc?.title || t.title || 'Sem título';
-      return \`<div class="workspace-tab \${state.activeTabId === t.noteId ? 'active' : ''}" draggable="true" data-tab-id="\${t.noteId}">
-        <button type="button" class="tab-btn" data-dt-click="switchTab(\${t.noteId})" aria-pressed="\${state.activeTabId === t.noteId}" title="\${esc(title)} — arraste para reordenar ou use Alt + setas">
+      return \`<div class="workspace-tab \${!state.showHome && state.activeTabId === t.noteId ? 'active' : ''}" draggable="true" data-tab-id="\${t.noteId}">
+        <button type="button" class="tab-btn" data-dt-click="switchTab(\${t.noteId})" aria-pressed="\${!state.showHome && state.activeTabId === t.noteId}" title="\${esc(title)} — arraste para reordenar ou use Alt + setas">
           <i class="far fa-file-lines" aria-hidden="true"></i><span>\${esc(title)}</span>\${nc?.dirty ? '<span class="notebook-unsaved" aria-label="Alterações pendentes"></span>' : ''}
         </button><button class="tab-close" data-dt-click="closeTab(\${t.noteId})" aria-label="Fechar aba \${esc(title)}"><i class="fas fa-xmark" aria-hidden="true"></i></button></div>\`;
     }).join('');
@@ -647,6 +658,8 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   }
 
   function switchTab(noteId) {
+    if(state.showHome || state.activeTabId!==noteId)recordNoteAccess(noteId);
+    state.showHome=false;document.body.classList.remove('home-open');
     const existing=state.paneIds.indexOf(noteId);
     if(existing>=0)state.activePane=existing;
     state.paneIds[state.activePane]=noteId;state.activeTabId=noteId;
@@ -654,6 +667,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   }
 
   function setLayout(count) {
+    state.showHome=false;document.body.classList.remove('home-open');
     if(![1,2,3,4].includes(count))return;
     document.getElementById('layoutMenu').open=false;
     let ids=state.paneIds.filter(Boolean);
@@ -664,6 +678,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     state.activePane=Math.max(0,state.paneIds.indexOf(state.activeTabId));
     state.activeTabId=state.paneIds[state.activePane];
     renderTabs();renderEditor();renderNotesList();
+    if(state.openTabs.length)showMobileEditor();
   }
 
   function activatePane(slot) {
@@ -673,6 +688,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   }
 
   function choosePane(slot,id) {
+    if(id && state.paneIds[slot]!==id)recordNoteAccess(id);
     const previous=state.paneIds[slot],other=state.paneIds.indexOf(id);
     if(other>=0 && other!==slot)state.paneIds[other]=previous;
     state.paneIds[slot]=id;state.activePane=slot;state.activeTabId=id;
@@ -710,8 +726,12 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   function renderEditor() {
     const grid=document.getElementById('workspaceGrid');
     const show=state.openTabs.length>0 || state.layout>1;
-    document.getElementById('editorPlaceholder').classList.toggle('hidden',show);
-    grid.hidden=!show; grid.dataset.layout=state.layout;
+    const showHome=state.showHome || !show;
+    document.getElementById('dashboardHome').classList.toggle('hidden',!showHome);
+    document.body.classList.toggle('home-open',showHome);home.setVisible(showHome);
+    document.querySelector('.dh-home-button').setAttribute('aria-pressed',String(showHome));
+    grid.hidden=showHome;grid.dataset.layout=state.layout;
+    if(showHome)return;
     for(const [id,view] of paneViews) {
       if(!state.paneIds.includes(id) || !show){view.editor.destroy();view.element.remove();paneViews.delete(id);}
     }
@@ -813,7 +833,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
           if (n) { n.title = title; n.content = content; n.version = data.version; n.updated_at = new Date().toISOString(); }
         }
         renderTabs(); renderNotesList();
-        nc.saveError=false;
+        nc.saveError=false;home.invalidate();
         refreshSaveStatus();
         const savedField=field(paneViews.get(noteId),'lastSaved');
         if(savedField && !nc.dirty)savedField.textContent='Salvo às '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
@@ -1073,7 +1093,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   init();
 
   // Declarative action routing. No eval, Function, or inline event handlers.
-  const actions = { setLayout, manageTabs, reorderTab, copyActiveNote, toggleFolderOutline, closeTab: typeof closeTab === "function" ? closeTab : null, copyShareUrl: typeof copyShareUrl === "function" ? copyShareUrl : null, createFolder: typeof createFolder === "function" ? createFolder : null, createNote: typeof createNote === "function" ? createNote : null, createShare: typeof createShare === "function" ? createShare : null, deleteNote: typeof deleteNote === "function" ? deleteNote : null, filterNotes: typeof filterNotes === "function" ? filterNotes : null, hideModal: typeof hideModal === "function" ? hideModal : null, loadAllNotes: typeof loadAllNotes === "function" ? loadAllNotes : null, mobileBack: typeof mobileBack === "function" ? mobileBack : null, moveNote: typeof moveNote === "function" ? moveNote : null, onContentChange: typeof onContentChange === "function" ? onContentChange : null, onTitleChange: typeof onTitleChange === "function" ? onTitleChange : null, openNote: typeof openNote === "function" ? openNote : null, revokeShare: typeof revokeShare === "function" ? revokeShare : null, selectFolder: typeof selectFolder === "function" ? selectFolder : null, shareNote: typeof shareNote === "function" ? shareNote : null, showFolderMenu: typeof showFolderMenu === "function" ? showFolderMenu : null, showNoteMenu: typeof showNoteMenu === "function" ? showNoteMenu : null, switchTab: typeof switchTab === "function" ? switchTab : null, togCh: typeof togCh === "function" ? togCh : null, toggleAllFolders: typeof toggleAllFolders === "function" ? toggleAllFolders : null, toggleSharePerm: typeof toggleSharePerm === "function" ? toggleSharePerm : null, toggleSidebar: typeof toggleSidebar === "function" ? toggleSidebar : null };
+  const actions = { showDashboardHome, setLayout, manageTabs, reorderTab, copyActiveNote, toggleFolderOutline, closeTab: typeof closeTab === "function" ? closeTab : null, copyShareUrl: typeof copyShareUrl === "function" ? copyShareUrl : null, createFolder: typeof createFolder === "function" ? createFolder : null, createNote: typeof createNote === "function" ? createNote : null, createShare: typeof createShare === "function" ? createShare : null, deleteNote: typeof deleteNote === "function" ? deleteNote : null, filterNotes: typeof filterNotes === "function" ? filterNotes : null, hideModal: typeof hideModal === "function" ? hideModal : null, loadAllNotes: typeof loadAllNotes === "function" ? loadAllNotes : null, mobileBack: typeof mobileBack === "function" ? mobileBack : null, moveNote: typeof moveNote === "function" ? moveNote : null, onContentChange: typeof onContentChange === "function" ? onContentChange : null, onTitleChange: typeof onTitleChange === "function" ? onTitleChange : null, openNote: typeof openNote === "function" ? openNote : null, revokeShare: typeof revokeShare === "function" ? revokeShare : null, selectFolder: typeof selectFolder === "function" ? selectFolder : null, shareNote: typeof shareNote === "function" ? shareNote : null, showFolderMenu: typeof showFolderMenu === "function" ? showFolderMenu : null, showNoteMenu: typeof showNoteMenu === "function" ? showNoteMenu : null, switchTab: typeof switchTab === "function" ? switchTab : null, togCh: typeof togCh === "function" ? togCh : null, toggleAllFolders: typeof toggleAllFolders === "function" ? toggleAllFolders : null, toggleSharePerm: typeof toggleSharePerm === "function" ? toggleSharePerm : null, toggleSidebar: typeof toggleSidebar === "function" ? toggleSidebar : null };
   function routeAction(event, attribute) {
     const el = event.target.closest('[' + attribute + ']');
     if (!el) return;
