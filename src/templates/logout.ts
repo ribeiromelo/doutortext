@@ -1,0 +1,5 @@
+import { brandLogo } from './brand'
+
+export function logoutPage() {
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="2;url=/"><title>Até logo — DoutorText</title><link rel="icon" href="/static/favicon-emerald.svg"><link rel="stylesheet" href="/static/inter.css"><link rel="stylesheet" href="/static/brand.css"><style>body{margin:0;min-height:100dvh;display:grid;place-items:center;background:#f7f9f8;color:#004d40;font-family:Inter,sans-serif;text-align:center}main{padding:32px}.dt-logo{width:230px}h1{font-size:24px;margin:30px 0 12px}p{color:#53645e;font-size:14px;line-height:1.7}a{display:inline-block;margin-top:16px;color:#004d40;font-size:14px;text-underline-offset:4px}</style></head><body><main>${brandLogo('green')}<h1>Até logo!</h1><p>Obrigado por usar o DoutorText.<br>Você será redirecionado para a página inicial.</p><a href="/">Ir para a página inicial</a></main></body></html>`
+}

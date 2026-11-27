@@ -1,3 +1,4 @@
+import { logoutPage } from './templates/logout'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { validId, validNote, publicShareAllowed } from './lib/security'
@@ -215,8 +216,10 @@ app.post('/logout', async (c) => {
     await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(sessionId).run()
   }
   deleteCookie(c, 'session', { path: '/' })
-  return c.redirect('/')
+  return c.redirect('/logout')
 })
+
+app.get('/logout', c => c.html(logoutPage()))
 
 // ============================================================
 // APP PAGE (protected)

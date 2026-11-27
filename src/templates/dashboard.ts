@@ -107,7 +107,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     </div>
   </header>
 
-  <div id="noteCreateLoading" class="dh-create-loading" role="status" aria-live="polite" hidden><div>${brandLogo('green')}<span class="dh-loading-line" aria-hidden="true"></span><p>Preparando sua nova nota…</p></div></div>
+  <div id="noteCreateLoading" class="dh-create-loading" role="status" aria-live="polite" hidden><div>${brandLogo('green')}<span class="dh-loading-line" aria-hidden="true"></span><p>Concluindo sua solicitação…</p></div></div>
 
   <!-- Mobile sidebar overlay -->
   <div id="sidebarOverlay" class="sidebar-overlay" data-dt-click="toggleSidebar()"></div>
@@ -237,7 +237,12 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   // ============================================================
   // API
   // ============================================================
+  let pendingOperations=0, operationTimer;
   async function api(path, opts = {}) {
+    const busy=opts.method && !['GET','HEAD'].includes(opts.method) && !path.endsWith('/access');
+    const overlay=document.getElementById('noteCreateLoading');
+    if(busy && ++pendingOperations===1){operationTimer=setTimeout(()=>{overlay.hidden=false;},350);document.body.setAttribute('aria-busy','true');}
+    try {
     const res = await fetch(API + path, {
       headers: { 'Content-Type': 'application/json', ...opts.headers },
       ...opts
@@ -246,7 +251,9 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
       const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
       const error = new Error(err.error || 'Erro'); error.status = res.status; throw error;
     }
-    return res.json();
+    return await res.json();
+    } finally {if(busy && --pendingOperations===0){clearTimeout(operationTimer);overlay.hidden=true;document.body.removeAttribute('aria-busy');}}
+
   }
 
   // ============================================================
@@ -540,9 +547,6 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
   async function createNote() {
     if(creatingNote)return;
     creatingNote=true;
-    const overlay=document.getElementById('noteCreateLoading');
-    const loadingTimer=setTimeout(()=>{overlay.hidden=false;},350);
-    document.body.setAttribute('aria-busy','true');
     try {
     const body = { title: 'Nova nota', content: '' };
     if (state.activeFolderId) body.folder_id = state.activeFolderId;
@@ -552,7 +556,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     await openNote(data.note.id);
     home.invalidate();
     showToast('Nota criada!');
-    } finally {clearTimeout(loadingTimer);overlay.hidden=true;document.body.removeAttribute('aria-busy');creatingNote=false;}
+    } finally {creatingNote=false;}
   }
 
   async function loadNoteTab(id, createdNote = null) {
