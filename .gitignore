@@ -36,3 +36,6 @@ lerna-debug.log*
 
 # misc
 .DS_Store
+
+/public/static/inter.css
+/public/static/dashboard-app/

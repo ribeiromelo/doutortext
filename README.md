@@ -1,5 +1,13 @@
 # DoutorText
 
+## Nova página inicial
+
+Implementação, arquivos, APIs, administração de comunicados, rastreamento de
+acessos, licença das imagens e ordem de publicação estão documentados em
+[DASHBOARD-HOME.md](DASHBOARD-HOME.md). Aplicar a migration 0006 no D1 antes do
+deploy desta versão. Plantão Guiado e Prescricionário ainda não possuem módulos
+neste repositório; os atalhos informam essa indisponibilidade.
+
 ## Visão Geral
 - **Nome**: DoutorText
 - **Objetivo**: Organizador de textos/notas com autenticação, pastas hierárquicas, abas, auto-save, compartilhamento colaborativo em tempo real e painel administrativo.

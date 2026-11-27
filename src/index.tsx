@@ -7,6 +7,7 @@ import { baseLayout, landingPage, loginPage, registerPage } from './templates/la
 import { dashboardPage } from './templates/dashboard'
 import { sharedNotePage } from './templates/shared'
 import { adminPage } from './templates/admin'
+import { registerDashboardRoutes } from './routes/dashboard'
 
 type Bindings = {
   DB: D1Database
@@ -15,6 +16,7 @@ type Bindings = {
 type Variables = {
   user: { id: number; username: string; email: string; is_admin: boolean } | null
 }
+export type AppEnv = { Bindings: Bindings; Variables: Variables }
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
 
@@ -106,6 +108,8 @@ function requireAdminAPI() {
     await next()
   }
 }
+
+registerDashboardRoutes(app, requireAuthAPI(), requireAdminAPI())
 
 // Helper: generate share token
 function generateShareToken(): string {

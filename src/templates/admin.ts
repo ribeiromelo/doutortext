@@ -36,6 +36,7 @@ export function adminPage(username: string) {
   <link rel="stylesheet" href="/static/emerald.css">
   <link rel="stylesheet" href="/static/admin.css">
   <link rel="stylesheet" href="/static/brand.css">
+  <link rel="stylesheet" href="/static/admin-slides.css">
 </head>
 <body class="admin-app bg-dark-50 min-h-screen">
   <!-- Toast -->
@@ -86,6 +87,8 @@ export function adminPage(username: string) {
       <button data-dt-click="switchTab('activity')" id="tab-activity" class="admin-tab px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex items-center gap-2 text-dark-500 hover:bg-dark-50">
         <i class="fas fa-clock-rotate-left text-xs"></i> Atividade
       </button>
+      <div class="ds-nav-group">Dashboard</div>
+      <button data-dt-click="switchTab('slides')" id="tab-slides" class="admin-tab"><i class="far fa-images" aria-hidden="true"></i><span class="ds-nav-full">Slides e comunicados</span><span class="ds-nav-short">Slides</span></button>
     </nav>
     <div class="admin-sidebar-bottom"><div class="admin-sidebar-icon"><i class="fas fa-layer-group" aria-hidden="true"></i></div><p>Seu espaço,<br>em perspectiva.</p><span>Acompanhe a comunidade e a organização do DoutorText.</span><a href="/app"><i class="fas fa-arrow-left" aria-hidden="true"></i> Voltar às notas</a></div>
   </aside>
@@ -95,11 +98,15 @@ export function adminPage(username: string) {
     <div id="content-overview" class="tab-content"></div>
     <div id="content-users" class="tab-content hidden"></div>
     <div id="content-activity" class="tab-content hidden"></div>
+    <div id="content-slides" class="tab-content hidden"></div>
   </main></div>
 
+  <script src="/static/dashboard-app/dashboard.js"></script>
   <script data-dt-script>
   let adminData = { stats: {}, users: [], activity: [] };
   let currentTab = 'overview';
+  let slidesManager=null;
+  async function loadSlides(){slidesManager ||= DTDashboard.mountSlidesAdmin(document.getElementById('content-slides'));await slidesManager.refresh();}
 
   // ============ TOAST ============
   let toastTimer;
@@ -144,9 +151,9 @@ export function adminPage(username: string) {
 
   // ============ TABS ============
   async function switchTab(tab) {
-    if (!['overview','users','activity'].includes(tab)) return;
+    if (!['overview','users','activity','slides'].includes(tab)) return;
     currentTab = tab;
-    const labels={overview:['Visão geral','Uma visão clara do seu espaço e de quem faz parte dele.'],users:['Usuários','Pessoas, permissões e organização da comunidade.'],activity:['Atividade','Acompanhe as edições e os compartilhamentos recentes.']};
+    const labels={slides:['Slides e comunicados','Dashboard / Conteúdo institucional e publicações agendadas.'],overview:['Visão geral','Uma visão clara do seu espaço e de quem faz parte dele.'],users:['Usuários','Pessoas, permissões e organização da comunidade.'],activity:['Atividade','Acompanhe as edições e os compartilhamentos recentes.']};
     document.getElementById('adminPageTitle').textContent=labels[tab][0];
     document.getElementById('adminPageDescription').textContent=labels[tab][1];
     document.querySelectorAll('.admin-tab').forEach(b=>{if(b.id==='tab-'+tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
@@ -156,7 +163,7 @@ export function adminPage(username: string) {
 
   async function refreshAdmin() {
     const tab=currentTab,container=document.getElementById('content-'+tab);
-    const loaders={overview:loadOverview,users:loadUsers,activity:loadActivity};
+    const loaders={overview:loadOverview,users:loadUsers,activity:loadActivity,slides:loadSlides};
     container.setAttribute('aria-busy','true');
     document.getElementById('adminUpdated').textContent='Atualizando…';
     try {
