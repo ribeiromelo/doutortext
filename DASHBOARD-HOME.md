@@ -91,10 +91,13 @@ R2 nem inserir credenciais no cliente. Uploads não vinculados ficam armazenados
 e não são expostos a usuários comuns. Limpeza de imagens órfãs e migração para
 R2 são melhorias operacionais futuras se o volume crescer.
 
-O carrossel usa intervalo de oito segundos, pausa por foco/hover/aba oculta,
-controle manual, indicadores, setas de teclado e swipe. Movimento reduzido
-desliga a reprodução inicial e as transições; o usuário pode retomá-la
-explicitamente. Falhas de imagem usam fundo verde; falhas da API exibem erro
+O carrossel avança automaticamente a cada oito segundos, sem botão de pausa.
+Só suspende o timer quando a home ou a aba não está visível. Mantém indicadores,
+setas e swipe; movimento reduzido remove as transições. O acesso Início fica
+ao lado da logo, com ícone e texto brancos. A criação reutiliza a nota retornada
+pelo POST, sem aguardar duas consultas extras. Acima de 350 ms, uma sobreposição
+com a logo sinaliza o carregamento e fecha também em caso de erro.
+Falhas de imagem usam fundo verde; falhas da API exibem erro
 e tentativa novamente. Sem slides publicados, há fallback institucional.
 
 ## Migrations e publicação
