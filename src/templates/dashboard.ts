@@ -86,6 +86,7 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
         <i class="fas fa-bars"></i>
       </button>
       <a href="/app" aria-label="DoutorText, início">${brandLogo('white')}</a>
+      <button type="button" class="dh-home-button" data-dt-click="showDashboardHome()" aria-label="Página inicial" title="Página inicial"><i class="fas fa-house" aria-hidden="true"></i><span>Início</span></button>
     </div>
     <div class="flex items-center gap-2 sm:gap-4">
       <span id="saveStatus" role="status" aria-live="polite" class="text-xs text-dark-400 save-ind">
@@ -105,6 +106,8 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
       </button></form>
     </div>
   </header>
+
+  <div id="noteCreateLoading" class="dh-create-loading" role="status" aria-live="polite" hidden><div>${brandLogo('green')}<span class="dh-loading-line" aria-hidden="true"></span><p>Preparando sua nova nota…</p></div></div>
 
   <!-- Mobile sidebar overlay -->
   <div id="sidebarOverlay" class="sidebar-overlay" data-dt-click="toggleSidebar()"></div>
@@ -134,7 +137,6 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
       <div id="documentPanel" class="flex-1 flex flex-col overflow-hidden bg-white">
         <!-- Tabs Bar -->
         <div class="border-b border-dark-200 bg-dark-50/50 flex items-center shrink-0 overflow-x-auto sb" id="tabsBar">
-          <button type="button" class="workspace-tool dh-home-button" data-dt-click="showDashboardHome()" aria-label="Página inicial" title="Página inicial"><i class="fas fa-house" aria-hidden="true"></i><span>Início</span></button>
           <div id="tabsContainer" class="flex items-center min-w-0" aria-label="Notas abertas"></div>
           <div class="workspace-tools">
             <button class="workspace-tool" data-dt-click="manageTabs()" title="Organizar abas" aria-label="Organizar abas"><i class="far fa-window-restore" aria-hidden="true"></i><span>Abas</span></button>
@@ -534,19 +536,29 @@ export function dashboardPage(username: string, isAdmin: boolean = false) {
     filterNotes();
   }
 
+  let creatingNote = false;
   async function createNote() {
+    if(creatingNote)return;
+    creatingNote=true;
+    const overlay=document.getElementById('noteCreateLoading');
+    const loadingTimer=setTimeout(()=>{overlay.hidden=false;},350);
+    document.body.setAttribute('aria-busy','true');
+    try {
     const body = { title: 'Nova nota', content: '' };
     if (state.activeFolderId) body.folder_id = state.activeFolderId;
     const data = await api('/notes', { method:'POST', body: JSON.stringify(body) });
-    await loadNotesByFolder(state.activeFolderId);
+    await loadNoteTab(data.note.id,data.note);
+    if(!state.activeFolderId || state.activeFolderId===data.note.folder_id)state.notes.unshift(data.note);
     await openNote(data.note.id);
+    home.invalidate();
     showToast('Nota criada!');
+    } finally {clearTimeout(loadingTimer);overlay.hidden=true;document.body.removeAttribute('aria-busy');creatingNote=false;}
   }
 
-  async function loadNoteTab(id) {
+  async function loadNoteTab(id, createdNote = null) {
     let tab = state.openTabs.find(t => t.noteId === id);
     if (!tab) {
-      const data = await api('/notes/' + id);
+      const data = createdNote ? {note:createdNote} : await api('/notes/' + id);
       if(state.openTabs.some(t=>t.noteId===id))return;
       const note = data.note;
       tab = { noteId: id, title: note.title };

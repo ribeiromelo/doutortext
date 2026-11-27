@@ -4,14 +4,13 @@ export function dashboardHome(username: string) {
   const first = username.trim().split(/\s+/)[0] || username
   return `<section id="dashboardHome" class="dh-home" aria-label="Página inicial">
     <header class="dh-welcome"><div><h1>Olá, <strong>${escapeHtml(first)}</strong></h1><p>Bem-vindo(a) ao <strong>DoutorText</strong></p></div>
-      <svg class="dh-waves" viewBox="0 0 320 90" fill="none" aria-hidden="true"><g stroke="currentColor" stroke-width=".8">${Array.from({length:8},(_,i)=>`<path d="M0 ${35+i*5} C80 ${-55+i*5},160 ${155+i*5},320 ${10+i*5}"/>`).join('')}</g></svg>
     </header>
     <div class="dh-composition">
       <section class="dh-carousel" aria-label="Benefícios e comunicados" aria-roledescription="carrossel" tabindex="0">
         <div class="dh-carousel-stage"></div>
         <button type="button" class="dh-slide-arrow dh-prev" aria-label="Comunicado anterior"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
         <button type="button" class="dh-slide-arrow dh-next" aria-label="Próximo comunicado"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
-        <div class="dh-carousel-controls"><div class="dh-slide-dots" aria-label="Escolher comunicado"></div><button type="button" class="dh-slide-pause" aria-label="Pausar reprodução automática"><i class="fas fa-pause" aria-hidden="true"></i></button></div>
+        <div class="dh-carousel-controls"><div class="dh-slide-dots" aria-label="Escolher comunicado"></div></div>
         <span class="dh-sr-status" role="status" aria-live="polite"></span>
       </section>
       <button type="button" class="dh-create"><span class="dh-create-icon"><i class="far fa-file-lines" aria-hidden="true"></i><span aria-hidden="true">+</span></span><span class="dh-create-copy"><strong>Crie uma nova nota</strong><span>Registre evoluções, prescrições, pareceres e documentos.</span></span><span class="dh-create-arrow" aria-hidden="true"><i class="fas fa-arrow-right"></i></span></button>

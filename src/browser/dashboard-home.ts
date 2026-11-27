@@ -4,10 +4,9 @@ type Options = { root: HTMLElement; onCreate: () => Promise<void>; onOpen: (id: 
 
 export function createHome({ root, onCreate, onOpen, onAll }: Options) {
   const carousel = root.querySelector<HTMLElement>('.dh-carousel')!, stage = carousel.querySelector<HTMLElement>('.dh-carousel-stage')!
-  const dots = carousel.querySelector<HTMLElement>('.dh-slide-dots')!, pause = carousel.querySelector<HTMLButtonElement>('.dh-slide-pause')!
+  const dots = carousel.querySelector<HTMLElement>('.dh-slide-dots')!
   const status = carousel.querySelector<HTMLElement>('[role="status"]')!, feedback = root.querySelector<HTMLElement>('.dh-home-feedback')!
-  const reduce = matchMedia('(prefers-reduced-motion: reduce)')
-  let slides: DashboardSlide[] = [], current = 0, visible = true, hover = false, interacting = false, manuallyPaused = reduce.matches
+  let slides: DashboardSlide[] = [], current = 0, visible = true
   let timer: ReturnType<typeof setTimeout> | undefined, pending: Promise<void> | undefined, dirty = true, loadedAt = 0
   let refreshTimer: ReturnType<typeof setTimeout> | undefined, touch: { x: number; y: number } | undefined
   let announcements = false
@@ -17,10 +16,7 @@ export function createHome({ root, onCreate, onOpen, onAll }: Options) {
 
   function schedule() {
     clearTimeout(timer)
-    const stopped = manuallyPaused
-    pause.setAttribute('aria-label', stopped ? 'Retomar reprodução automática' : 'Pausar reprodução automática')
-    pause.innerHTML = `<i class="fas fa-${stopped ? 'play' : 'pause'}" aria-hidden="true"></i>`
-    if (slides.length > 1 && !stopped && visible && !hover && !interacting && !document.hidden) timer = setTimeout(() => change(current + 1, false), 8000)
+    if (slides.length > 1 && visible && !document.hidden) timer = setTimeout(() => change(current + 1, false), 8000)
   }
   function change(index: number, announce = true) {
     if (!slides.length) return
@@ -52,19 +48,13 @@ export function createHome({ root, onCreate, onOpen, onAll }: Options) {
   }
   carousel.querySelector('.dh-prev')!.addEventListener('click', () => change(current - 1))
   carousel.querySelector('.dh-next')!.addEventListener('click', () => change(current + 1))
-  pause.addEventListener('click', () => { manuallyPaused = !manuallyPaused; schedule() })
-  carousel.addEventListener('mouseenter', () => { hover = true; schedule() })
-  carousel.addEventListener('mouseleave', () => { hover = false; schedule() })
-  carousel.addEventListener('focusin', () => { interacting = true; schedule() })
-  carousel.addEventListener('focusout', e => { if (!carousel.contains(e.relatedTarget as Node)) { interacting = false; schedule() } })
   carousel.addEventListener('keydown', e => {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); change(current + (e.key === 'ArrowLeft' ? -1 : 1)) }
-    if (e.target === carousel && e.key === ' ') { e.preventDefault(); pause.click() }
   })
   carousel.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse' && !(e.target as Element).closest('a,button')) touch = { x:e.clientX,y:e.clientY } })
   carousel.addEventListener('pointerup', e => { if (!touch) return; const dx = e.clientX - touch.x, dy = e.clientY - touch.y; touch = undefined; if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.4) change(current + (dx < 0 ? 1 : -1)) })
   carousel.addEventListener('pointercancel', () => touch = undefined)
-  document.addEventListener('visibilitychange', schedule); reduce.addEventListener('change', () => { if(reduce.matches)manuallyPaused=true; schedule() })
+  document.addEventListener('visibilitychange', schedule)
 
   function dateLabel(value: string) {
     const date = new Date(value.includes('T') ? value : value.replace(' ','T') + 'Z')
